@@ -1,7 +1,6 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { useCallback, useContext, useEffect, useState } from 'react'
 import {
   Typography,
-  Button,
   List,
   ListSubheader,
   Box,
@@ -12,7 +11,7 @@ import CertificateAccessList from './CertificateAccessList'
 import ProtocolPermissionList from './ProtocolPermissionList'
 import { WalletContext } from '../WalletContext'
 import AppLogo from './AppLogo'
-import { useLocation, useNavigate } from 'react-router-dom'
+ 
 
 /* ------------------------------------------------------------------ */
 /*  Type helpers                                                      */
@@ -93,8 +92,6 @@ const AccessAtAGlance = ({ originator }: AccessAtAGlanceProps) => {
   /* ------------- Context / state ---------------------------------- */
   const { managers, adminOriginator } = useContext(WalletContext)
   const permissionsManager = managers.permissionsManager
-  const navigate = useNavigate()
-  const location = useLocation()
 
   if (!permissionsManager) {
     return (
@@ -200,12 +197,6 @@ const AccessAtAGlance = ({ originator }: AccessAtAGlanceProps) => {
     return () => controller.abort()
   }, [originator, adminOriginator, permissionsManager, processActionsInChunks])
 
-  /* ------------- Memo: path for manage-app link ------------------- */
-  const manageAppPath = useMemo(
-    () => `/dashboard/manage-app/${encodeURIComponent(originator)}`,
-    [originator],
-  )
-
   /* ------------- Render ------------------------------------------- */
 
   return (
@@ -291,20 +282,6 @@ const AccessAtAGlance = ({ originator }: AccessAtAGlanceProps) => {
           )}
       </Box>
 
-      {/* ---------------------- Manage app button --------------------- */}
-      <Box textAlign="center" sx={{ p: '1em' }}>
-      <Button
-          onClick={() => navigate(manageAppPath)}
-          sx={{
-            backgroundColor:
-              location.pathname === manageAppPath
-                ? 'action.selected'
-                : 'inherit',
-          }}
-        >
-          Manage App
-        </Button>
-      </Box>
     </div>
   )
 }

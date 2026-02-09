@@ -22,6 +22,8 @@ interface PageHeaderProps {
   secondaryButtonTitle?: string
   secondaryButtonIcon?: React.ReactNode
   onSecondaryClick?: () => void
+  secondaryButtonVariant?: 'text' | 'outlined' | 'contained'
+  secondaryButtonSize?: 'small' | 'medium' | 'large'
 }
 
 const PageHeader: FC<PageHeaderProps> = ({
@@ -38,6 +40,8 @@ const PageHeader: FC<PageHeaderProps> = ({
   secondaryButtonTitle,
   secondaryButtonIcon,
   onSecondaryClick,
+  secondaryButtonVariant = 'outlined',
+  secondaryButtonSize = 'large',
 }) => {
   const styles = useSxStyles(style)
   const navigate = useNavigate()
@@ -79,9 +83,9 @@ const PageHeader: FC<PageHeaderProps> = ({
           {showSecondaryButton && secondaryButtonTitle && (
             <Button
               sx={{ ...styles.action_button, mr: showButton ? 1 : 0 }}
-              variant="outlined"
+              variant={secondaryButtonVariant}
               color="primary"
-              size="large"
+              size={secondaryButtonSize}
               startIcon={secondaryButtonIcon}
               onClick={onSecondaryClick}
             >

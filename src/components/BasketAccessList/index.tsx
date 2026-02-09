@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import {
   Box,
   Dialog,
@@ -21,9 +21,14 @@ import AppChip from '../AppChip';
 import { formatDistance } from 'date-fns';
 import { WalletContext } from '../../WalletContext'
 import AppLogo from '../AppLogo';
+import { PermissionToken } from '@bsv/wallet-toolbox-client';
+
+const sleep = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms))
+
+type RevokedOutpoint = { txid?: string; outputIndex?: number }
+
 // Simple in-memory cache for basket permissions
 const BASKET_CACHE = new Map<string, PermissionToken[]>();
-import { PermissionToken } from '@bsv/wallet-toolbox-client';
 
 const formatExpiry = (expiry?: number) => {
   // expiry of 0 means never expires - don't show any text
@@ -80,14 +85,27 @@ const BasketAccessList: React.FC<BasketAccessListProps> = ({
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const fetchPermissions = useCallback(async () => {
+  const refreshDebounceRef = useRef<number | null>(null)
+  const verifyRefreshRunIdRef = useRef(0)
+  const lastRawSignatureRef = useRef<string>('')
+  const recentlyRevokedRef = useRef<Map<string, number>>(new Map())
+  const REVOKE_TTL_MS = 2 * 60 * 1000
+
+  const signatureFromPermissions = useCallback((tokens: PermissionToken[]) => {
+    return tokens
+      .map(p => `${p.txid}.${p.outputIndex}`)
+      .sort()
+      .join('|')
+  }, [])
+
+  const fetchPermissions = useCallback(async (opts?: { force?: boolean }) => {
     if (!permissionsManager || !adminOriginator) {
       setLoading(false);
       setError('Permissions manager is not available.');
       return;
     }
     // Return cached data if available
-    if (BASKET_CACHE.has(queryKey)) {
+    if (!opts?.force && BASKET_CACHE.has(queryKey)) {
       setGrants(BASKET_CACHE.get(queryKey)!);
       setLoading(false);
       setError(null);
@@ -98,10 +116,23 @@ const BasketAccessList: React.FC<BasketAccessListProps> = ({
     setError(null);
 
     try {
-      const tokens = await permissionsManager.listBasketAccess({
+      const tokensAll = await permissionsManager.listBasketAccess({
         basket,
         originator: normalizedApp
       })
+
+      const now = Date.now()
+      for (const [k, ts] of recentlyRevokedRef.current.entries()) {
+        if (now - ts > REVOKE_TTL_MS) recentlyRevokedRef.current.delete(k)
+      }
+
+      const tokens = tokensAll.filter(t => {
+        const key = `${t.txid}.${t.outputIndex}`
+        const ts = recentlyRevokedRef.current.get(key)
+        return !ts || now - ts > REVOKE_TTL_MS
+      })
+
+      lastRawSignatureRef.current = signatureFromPermissions(tokens)
 
       // Transform tokens into grants with necessary display properties
       const grants = tokens.map((token: PermissionToken) => {
@@ -147,7 +178,23 @@ const BasketAccessList: React.FC<BasketAccessListProps> = ({
       }
       BASKET_CACHE.delete(queryKey);
       // Refresh the list after revoking
-      await fetchPermissions();
+      await fetchPermissions({ force: true });
+
+      try {
+        window.dispatchEvent(new CustomEvent('basket-access-changed', {
+          detail: {
+            op: 'revoke',
+            originator: normalizedApp || app,
+            revoked: grant
+              ? [{ txid: grant.txid, outputIndex: grant.outputIndex }]
+              : currentAccessGrant
+                ? [{ txid: currentAccessGrant.txid, outputIndex: currentAccessGrant.outputIndex }]
+                : []
+          }
+        }))
+      } catch {
+        // ignore
+      }
     } catch (error) {
       console.error('Failed to revoke access:', error);
     } finally {
@@ -174,6 +221,104 @@ const BasketAccessList: React.FC<BasketAccessListProps> = ({
   useEffect(() => {
     fetchPermissions();
   }, [fetchPermissions]);
+
+  useEffect(() => {
+    const fetchPermissionsVerified = async (o?: {
+      minAttempts?: number
+      requireChange?: boolean
+      expectedDifferentFrom?: string
+    }) => {
+      if (!permissionsManager || !adminOriginator) return
+
+      const minAttempts = typeof o?.minAttempts === 'number' ? Math.max(1, o.minAttempts) : 2
+      const requireChange = !!o?.requireChange
+      const expectedDifferentFrom = typeof o?.expectedDifferentFrom === 'string' ? o.expectedDifferentFrom : ''
+
+      const runId = ++verifyRefreshRunIdRef.current
+      const delays = [0, 150, 350, 750, 1500, 3000, 6000]
+      let prevSig: string | null = null
+      let sawChange = !requireChange
+
+      for (let attempt = 0; attempt < delays.length; attempt++) {
+        if (runId !== verifyRefreshRunIdRef.current) return
+        const delay = delays[attempt]
+        if (delay) await sleep(delay)
+
+        try {
+          BASKET_CACHE.delete(queryKey)
+          await fetchPermissions({ force: true })
+          if (runId !== verifyRefreshRunIdRef.current) return
+
+          const sig = lastRawSignatureRef.current
+          if (!sawChange && sig !== expectedDifferentFrom) {
+            sawChange = true
+          }
+
+          if (!sawChange) {
+            prevSig = sig
+            continue
+          }
+
+          if (attempt + 1 < minAttempts) {
+            prevSig = sig
+            continue
+          }
+
+          if (prevSig !== null && sig === prevSig) {
+            return
+          }
+          prevSig = sig
+        } catch (err) {
+          console.error('verified basket refresh failed:', err)
+          return
+        }
+      }
+    }
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<any>).detail || {}
+      if (app) {
+        const norm = app.replace(/^https?:\/\//, '')
+        const detailOriginator = typeof detail.originator === 'string'
+          ? detail.originator.replace(/^https?:\/\//, '')
+          : undefined
+        if (detailOriginator && detailOriginator !== norm) return
+      }
+
+      const revoked: RevokedOutpoint[] = Array.isArray(detail.revoked) ? detail.revoked : []
+      if (revoked.length) {
+        const now = Date.now()
+        for (const r of revoked) {
+          if (!r?.txid || typeof r.outputIndex !== 'number') continue
+          recentlyRevokedRef.current.set(`${r.txid}.${r.outputIndex}`, now)
+        }
+        setGrants(prev => prev.filter(p => !revoked.some(r => r?.txid === p.txid && r.outputIndex === p.outputIndex)))
+        BASKET_CACHE.delete(queryKey)
+      }
+
+      if (refreshDebounceRef.current) {
+        window.clearTimeout(refreshDebounceRef.current)
+      }
+
+      refreshDebounceRef.current = window.setTimeout(() => {
+        const op = typeof detail.op === 'string' ? detail.op : ''
+        const requireChange = op === 'grant' || op === 'revoke' || op === 'grant-group'
+        const minAttempts = requireChange ? 2 : 1
+        const expectedDifferentFrom = requireChange ? lastRawSignatureRef.current : ''
+        void fetchPermissionsVerified({ minAttempts, requireChange, expectedDifferentFrom })
+      }, 150)
+    }
+
+    window.addEventListener('basket-access-changed', handler as EventListener)
+    return () => {
+      window.removeEventListener('basket-access-changed', handler as EventListener)
+      verifyRefreshRunIdRef.current += 1
+      if (refreshDebounceRef.current) {
+        window.clearTimeout(refreshDebounceRef.current)
+        refreshDebounceRef.current = null
+      }
+    }
+  }, [app, adminOriginator, fetchPermissions, permissionsManager, queryKey])
 
   if (loading) {
     return (

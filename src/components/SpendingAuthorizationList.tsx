@@ -21,6 +21,10 @@ type Props = {
 /** Local in-memory cache keyed by `app` */
 const SPENDING_CACHE = new Map<string, { auth: PermissionToken | null; spent: number }>();
 
+const sleep = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms))
+
+type RevokedOutpoint = { txid?: string; outputIndex?: number }
+
 export const SpendingAuthorizationList: FC<Props> = ({
   app,
   onEmptyList = () => { },
@@ -139,28 +143,53 @@ export const SpendingAuthorizationList: FC<Props> = ({
   const cacheKey = app + activeProfile.id;
   const prevRqRef = useRef<number>(spendingRequests.length);
 
+  const refreshDebounceRef = useRef<number | null>(null)
+  const verifyRefreshRunIdRef = useRef(0)
+  const lastAuthSignatureRef = useRef<string>('')
+  const recentlyRevokedRef = useRef<Map<string, number>>(new Map())
+  const REVOKE_TTL_MS = 2 * 60 * 1000
+
   // --------------------------------------------------------------------------
   //   HELPERS
   // --------------------------------------------------------------------------
-  const refreshAuthorizations = useCallback(async () => {
+  const signatureFromAuth = useCallback((auth: PermissionToken | null, spent: number) => {
+    if (!auth) return `none.${spent}`
+    return `${auth.txid}.${auth.outputIndex}.${auth.expiry ?? ''}.${auth.authorizedAmount ?? ''}.${spent}`
+  }, [])
+
+  const refreshAuthorizations = useCallback(async (opts?: { force?: boolean }) => {
     // Skip cache when waiting for authorization to ensure we fetch fresh data
-    if (!busy.waitingForAuth && !busy.renewLimit && SPENDING_CACHE.has(cacheKey)) {
+    if (!opts?.force && !busy.waitingForAuth && !busy.renewLimit && SPENDING_CACHE.has(cacheKey)) {
       const { auth, spent } = SPENDING_CACHE.get(cacheKey)!;
       setAuthorization(auth);
       setCurrentSpending(spent);
       setAuthorizedAmount(auth?.authorizedAmount ?? 0);
+      lastAuthSignatureRef.current = signatureFromAuth(auth, spent)
       setBusy(b => ({ ...b, list: false }));
       return;
     }
 
     try {
-      const auths = await managers.permissionsManager.listSpendingAuthorizations({ originator: app });
+      const authsAll = await managers.permissionsManager.listSpendingAuthorizations({ originator: app });
+
+      const now = Date.now()
+      for (const [k, ts] of recentlyRevokedRef.current.entries()) {
+        if (now - ts > REVOKE_TTL_MS) recentlyRevokedRef.current.delete(k)
+      }
+
+      const auths = authsAll.filter(a => {
+        const key = `${a.txid}.${a.outputIndex}`
+        const ts = recentlyRevokedRef.current.get(key)
+        return !ts || now - ts > REVOKE_TTL_MS
+      })
+
       if (!auths?.length) {
         if (!busy.waitingForAuth && !busy.renewLimit) {
           setAuthorization(null);
           setCurrentSpending(0);
           setAuthorizedAmount(0);
           SPENDING_CACHE.delete(cacheKey);
+          lastAuthSignatureRef.current = signatureFromAuth(null, 0)
           onEmptyList();
         }
       } else {
@@ -170,6 +199,7 @@ export const SpendingAuthorizationList: FC<Props> = ({
         setCurrentSpending(spent);
         setAuthorizedAmount(auth.authorizedAmount);
         SPENDING_CACHE.set(cacheKey, { auth, spent });
+        lastAuthSignatureRef.current = signatureFromAuth(auth, spent)
       }
     } catch {
       if (!busy.waitingForAuth && !busy.renewLimit) {
@@ -178,7 +208,57 @@ export const SpendingAuthorizationList: FC<Props> = ({
     } finally {
       setBusy(b => ({ ...b, list: false }));
     }
-  }, [app, cacheKey, managers.permissionsManager, onEmptyList, busy.waitingForAuth, busy.renewLimit]);
+  }, [app, cacheKey, managers.permissionsManager, onEmptyList, busy.waitingForAuth, busy.renewLimit, signatureFromAuth]);
+
+  const refreshAuthorizationsVerified = useCallback(async (o?: {
+    minAttempts?: number
+    requireChange?: boolean
+    expectedDifferentFrom?: string
+  }) => {
+    const minAttempts = typeof o?.minAttempts === 'number' ? Math.max(1, o.minAttempts) : 2
+    const requireChange = !!o?.requireChange
+    const expectedDifferentFrom = typeof o?.expectedDifferentFrom === 'string' ? o.expectedDifferentFrom : ''
+
+    const runId = ++verifyRefreshRunIdRef.current
+    const delays = [0, 150, 350, 750, 1500, 3000, 6000]
+    let prevSig: string | null = null
+    let sawChange = !requireChange
+
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (runId !== verifyRefreshRunIdRef.current) return
+      const delay = delays[attempt]
+      if (delay) await sleep(delay)
+
+      try {
+        SPENDING_CACHE.delete(cacheKey)
+        await refreshAuthorizations({ force: true })
+        if (runId !== verifyRefreshRunIdRef.current) return
+
+        const sig = lastAuthSignatureRef.current
+        if (!sawChange && sig !== expectedDifferentFrom) {
+          sawChange = true
+        }
+
+        if (!sawChange) {
+          prevSig = sig
+          continue
+        }
+
+        if (attempt + 1 < minAttempts) {
+          prevSig = sig
+          continue
+        }
+
+        if (prevSig !== null && sig === prevSig) {
+          return
+        }
+        prevSig = sig
+      } catch (err) {
+        console.error('verified spending refresh failed:', err)
+        return
+      }
+    }
+  }, [cacheKey, refreshAuthorizations])
 
   // --------------------------------------------------------------------------
   //   MUTATIONS
@@ -201,6 +281,11 @@ export const SpendingAuthorizationList: FC<Props> = ({
       SPENDING_CACHE.delete(cacheKey);
       await refreshAuthorizations();
       setIsEditingLimit(false);
+      try {
+        window.dispatchEvent(new CustomEvent('spending-authorization-changed', { detail: { op: 'grant', originator: app } }))
+      } catch {
+        // ignore
+      }
     } catch (e: unknown) {
       toast.error(`Failed to create spending authorization: ${e instanceof Error ? e.message : 'unknown error'}`);
     } finally {
@@ -251,6 +336,11 @@ export const SpendingAuthorizationList: FC<Props> = ({
       SPENDING_CACHE.delete(cacheKey);
       await refreshAuthorizations();
       setIsEditingLimit(false);
+      try {
+        window.dispatchEvent(new CustomEvent('spending-authorization-changed', { detail: { op: 'grant', originator: app } }))
+      } catch {
+        // ignore
+      }
     } catch (e: unknown) {
       toast.error(`Failed to increase spending authorization: ${e instanceof Error ? e.message : 'unknown error'}`);
     } finally {
@@ -266,6 +356,12 @@ export const SpendingAuthorizationList: FC<Props> = ({
       setDialogOpen(false);
       SPENDING_CACHE.delete(cacheKey);
       await refreshAuthorizations();
+      try {
+        const revoked: RevokedOutpoint[] = [{ txid: authorization.txid, outputIndex: authorization.outputIndex }]
+        window.dispatchEvent(new CustomEvent('spending-authorization-changed', { detail: { op: 'revoke', originator: app, revoked } }))
+      } catch {
+        // ignore
+      }
     } catch (e: unknown) {
       toast.error(`Failed to revoke spending authorization: ${e instanceof Error ? e.message : 'unknown error'}`);
     } finally {
@@ -288,6 +384,52 @@ export const SpendingAuthorizationList: FC<Props> = ({
     }
     prevRqRef.current = spendingRequests.length;
   }, [spendingRequests, cacheKey, refreshAuthorizations]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<any>).detail || {}
+      const detailOriginator = typeof detail.originator === 'string'
+        ? detail.originator.replace(/^https?:\/\//, '')
+        : undefined
+      const norm = app.replace(/^https?:\/\//, '')
+      if (detailOriginator && detailOriginator !== norm) return
+
+      const revoked: RevokedOutpoint[] = Array.isArray(detail.revoked) ? detail.revoked : []
+      if (revoked.length) {
+        const now = Date.now()
+        for (const r of revoked) {
+          if (!r?.txid || typeof r.outputIndex !== 'number') continue
+          recentlyRevokedRef.current.set(`${r.txid}.${r.outputIndex}`, now)
+        }
+        SPENDING_CACHE.delete(cacheKey)
+        setAuthorization(null)
+        setCurrentSpending(0)
+        setAuthorizedAmount(0)
+      }
+
+      if (refreshDebounceRef.current) {
+        window.clearTimeout(refreshDebounceRef.current)
+      }
+
+      refreshDebounceRef.current = window.setTimeout(() => {
+        const op = typeof detail.op === 'string' ? detail.op : ''
+        const requireChange = op === 'grant' || op === 'revoke' || op === 'grant-group'
+        const minAttempts = requireChange ? 2 : 1
+        const expectedDifferentFrom = requireChange ? lastAuthSignatureRef.current : ''
+        void refreshAuthorizationsVerified({ minAttempts, requireChange, expectedDifferentFrom })
+      }, 150)
+    }
+
+    window.addEventListener('spending-authorization-changed', handler as EventListener)
+    return () => {
+      window.removeEventListener('spending-authorization-changed', handler as EventListener)
+      verifyRefreshRunIdRef.current += 1
+      if (refreshDebounceRef.current) {
+        window.clearTimeout(refreshDebounceRef.current)
+        refreshDebounceRef.current = null
+      }
+    }
+  }, [app, cacheKey, refreshAuthorizationsVerified])
 
   // --------------------------------------------------------------------------
   //   RENDER
