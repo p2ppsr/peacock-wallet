@@ -1,4 +1,4 @@
-import { useContext, useMemo } from 'react'
+import { useContext, useEffect, useMemo, useState } from 'react'
 import {
   DialogContent,
   DialogActions,
@@ -7,11 +7,9 @@ import {
   Divider,
   Box,
   Stack,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Tooltip
+  Tooltip,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import CustomDialog from '../CustomDialog'
@@ -28,9 +26,21 @@ const CounterpartyPermissionHandler = () => {
 
   const currentRequest = counterpartyPermissionRequests[0]
 
-  const capabilityLines = useMemo(() => {
+  const protocolKey = (p: any) => `${p?.protocolID?.[0] ?? ''}|${p?.protocolID?.[1] ?? ''}`
+  const [checkedProtocolKeys, setCheckedProtocolKeys] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (!currentRequest?.permissions?.protocols?.length) {
+      setCheckedProtocolKeys(new Set())
+      return
+    }
+    setCheckedProtocolKeys(new Set(currentRequest.permissions.protocols.map(protocolKey)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRequest?.requestID])
+
+  const protocolItems = useMemo(() => {
     if (!currentRequest?.permissions?.protocols?.length) return []
-    return currentRequest.permissions.protocols.map(p => p.description || p.protocolID?.[1] || 'Protocol access')
+    return currentRequest.permissions.protocols
   }, [currentRequest])
 
   const handleDeny = async () => {
@@ -47,10 +57,11 @@ const CounterpartyPermissionHandler = () => {
   const handleGrant = async () => {
     if (currentRequest?.requestID) {
       try {
+        const selectedProtocols = (currentRequest.permissions?.protocols || []).filter(p => checkedProtocolKeys.has(protocolKey(p)))
         await (managers.permissionsManager as any)?.grantCounterpartyPermission?.({
           requestID: currentRequest.requestID,
           granted: {
-            protocols: currentRequest.permissions?.protocols || []
+            protocols: selectedProtocols
           },
           expiry: 0
         })
@@ -81,59 +92,73 @@ const CounterpartyPermissionHandler = () => {
   return (
     <CustomDialog
       open={counterpartyPermissionModalOpen}
-      title="New Counterparty Permission Request"
+      title="Trust This Person?"
       onClose={handleDeny}
     >
       <DialogContent>
         <Stack spacing={2}>
-          <Box sx={{ textAlign: 'center' }}>
-            <AppChip size={2} showDomain label={originator || 'unknown'} clickable={false} />
-          </Box>
+          <Stack spacing={1} alignItems="center">
+            <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" flexWrap="wrap">
+              <Box sx={{ opacity: 0.9 }}>
+                <AppChip size={1.7} showDomain label={originator || 'unknown'} clickable={false} />
+              </Box>
+              <CounterpartyChip counterparty={counterparty} label={counterpartyLabel || 'Counterparty'} layout="compact" clickable={false} />
+            </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+              You are about to trust this counterparty for specific Level 2 protocols when using this app.
+            </Typography>
+          </Stack>
 
           <Divider />
 
           <Typography variant="body1" sx={{ lineHeight: 1.6 }}>
-            You&apos;re interacting with a new person through this app.
+            Select which protocol capabilities you want to allow for this person.
           </Typography>
 
-          <CounterpartyChip counterparty={counterparty} label={counterpartyLabel || 'Counterparty'} layout="compact" />
-
-          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-            This person will be able to:
-          </Typography>
-
-          <List>
-            {capabilityLines.map((item, i) => (
-              <ListItem key={i} sx={{ py: 1 }}>
-                <ListItemIcon>
-                  <CheckCircleOutlineIcon color="primary" />
-                </ListItemIcon>
-                <ListItemText primary={item} />
-              </ListItem>
-            ))}
-          </List>
-
-          {Array.isArray(currentRequest.permissions?.protocols) && currentRequest.permissions.protocols.length > 0 && (
-            <>
-              <Divider />
-              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                Level 2 protocols granted at once:
-              </Typography>
-              <Stack spacing={1}>
-                {currentRequest.permissions.protocols.map((p, i) => (
-                  <ProtoChip
-                    key={i}
-                    securityLevel={p.protocolID[0]}
-                    protocolID={p.protocolID[1]}
-                    counterparty={counterparty}
-                    originator={originator}
-                    clickable={false}
-                    canRevoke={false}
-                    layout="compact"
-                  />
-                ))}
-              </Stack>
-            </>
+          {Array.isArray(protocolItems) && protocolItems.length > 0 && (
+            <Stack spacing={1}>
+              {protocolItems.map((p, i) => (
+                <FormControlLabel
+                  key={i}
+                  control={
+                    <Checkbox
+                      checked={checkedProtocolKeys.has(protocolKey(p))}
+                      onChange={(e) => {
+                        const key = protocolKey(p)
+                        setCheckedProtocolKeys(prev => {
+                          const next = new Set(prev)
+                          if (e.target.checked) next.add(key)
+                          else next.delete(key)
+                          return next
+                        })
+                      }}
+                    />
+                  }
+                  label={
+                    <Stack spacing={0.5} sx={{ py: 0.5 }}>
+                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                        <CheckCircleOutlineIcon color="primary" fontSize="small" />
+                        <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                          {p.description || p.protocolID?.[1] || 'Protocol access'}
+                        </Typography>
+                      </Stack>
+                      {Array.isArray(p.protocolID) && p.protocolID.length > 1 && (
+                        <ProtoChip
+                          securityLevel={p.protocolID[0]}
+                          protocolID={p.protocolID[1]}
+                          counterparty={counterparty}
+                          originator={originator}
+                          clickable={false}
+                          canRevoke={false}
+                          layout="compact"
+                        />
+                      )}
+                    </Stack>
+                  }
+                  sx={{ alignItems: 'flex-start', m: 0 }}
+                />
+              ))}
+            </Stack>
           )}
         </Stack>
       </DialogContent>
@@ -147,7 +172,7 @@ const CounterpartyPermissionHandler = () => {
           Deny
         </Button>
         <Button onClick={handleGrant} variant="contained" color="primary">
-          Allow & Trust
+          Allow Selected
         </Button>
       </DialogActions>
     </CustomDialog>

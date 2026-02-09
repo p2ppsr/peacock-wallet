@@ -9,6 +9,7 @@ import CachedIcon from '@mui/icons-material/Cached'
 import ShoppingBasketIcon from '@mui/icons-material/ShoppingBasket'
 import { InfoRow, PermissionHeader, RequestCard, Surface } from '../permissions/PermissionScaffold'
 import { getRegistryClient } from '../../utils/clientFactories'
+import CounterpartyChip from '../CounterpartyChip'
 
 // Permission type documents
 const permissionTypeDocs = {
@@ -35,11 +36,10 @@ const permissionTypeDocs = {
 };
 
 const ProtocolPermissionHandler = () => {
-  const { protocolRequests, advanceProtocolQueue, managers, settings, clients } = useContext(WalletContext)
+  const { protocolRequests, advanceProtocolQueue, managers, settings } = useContext(WalletContext)
   const { protocolAccessModalOpen } = useContext(UserContext)
   const [protocolName, setProtocolName] = useState<string | null>(null)
   const [protocolDescription, setProtocolDescription] = useState<string | null>(null)
-  const [counterpartyName, setCounterpartyName] = useState<string | null>(null)
 
   const registry = useMemo(
     () => getRegistryClient(managers?.permissionsManager),
@@ -121,29 +121,6 @@ const ProtocolPermissionHandler = () => {
     }
   }, [registry, settings?.trustSettings, protocolLabel, protocolSecurity])
 
-  useEffect(() => {
-    let cancelled = false
-    const resolveCounterparty = async () => {
-      if (!clients?.identityClient || !currentPerm.counterparty) return
-      try {
-        const results = await clients.identityClient.resolveByIdentityKey({ identityKey: currentPerm.counterparty })
-        if (!cancelled && Array.isArray(results) && results.length > 0) {
-          setCounterpartyName(results[0].name || null)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          console.warn('Failed to resolve counterparty identity', err)
-        }
-      }
-    }
-    if (currentPerm) {
-      resolveCounterparty()
-    }
-    return () => {
-      cancelled = true
-    }
-  }, [clients?.identityClient, currentPerm?.counterparty])
-
   if (!protocolAccessModalOpen || !currentPerm) return null
 
   return (
@@ -180,7 +157,14 @@ const ProtocolPermissionHandler = () => {
               {currentPerm.counterparty && (
                 <InfoRow
                   label="Counterparty"
-                  value={counterpartyName || currentPerm.counterparty}
+                  value={(
+                    <CounterpartyChip
+                      counterparty={currentPerm.counterparty}
+                      clickable={false}
+                      layout="compact"
+                      size={1.0}
+                    />
+                  )}
                 />
               )}
             </Stack>

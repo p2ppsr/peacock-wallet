@@ -255,6 +255,41 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   const groupRequestCooldownKeyByIdRef = useRef<Map<string, string>>(new Map());
   const groupCooldownUntilRef = useRef<Record<string, number>>({});
   const GROUP_COOLDOWN_MS = 5 * 60 * 1000;
+
+  const pactCooldownTimerByCacheKeyRef = useRef<Record<string, number>>({})
+  const PACT_COOLDOWN_MS = 5 * 60 * 1000
+
+  const getPactCacheKey = useCallback((originator: string, counterparty: string) => {
+    const normalizedOriginator = originator.replace(/^https?:\/\//, '')
+    return `${normalizedOriginator}:${counterparty}`
+  }, [])
+
+  const startPactCooldown = useCallback((originator: string, counterparty: string) => {
+    const cacheKey = getPactCacheKey(originator, counterparty)
+    const normalizedOriginator = originator.replace(/^https?:\/\//, '')
+    groupCooldownUntilRef.current[`${normalizedOriginator}|${counterparty}`] = Date.now() + GROUP_COOLDOWN_MS
+
+    try {
+      ;(permissionsManagerRef.current as any)?.pactEstablishedCache?.set?.(cacheKey, Date.now())
+    } catch {
+      // ignore
+    }
+
+    const prevTimer = pactCooldownTimerByCacheKeyRef.current[cacheKey]
+    if (prevTimer) {
+      window.clearTimeout(prevTimer)
+      delete pactCooldownTimerByCacheKeyRef.current[cacheKey]
+    }
+
+    pactCooldownTimerByCacheKeyRef.current[cacheKey] = window.setTimeout(() => {
+      try {
+        ;(permissionsManagerRef.current as any)?.pactEstablishedCache?.delete?.(cacheKey)
+      } catch {
+        // ignore
+      }
+      delete pactCooldownTimerByCacheKeyRef.current[cacheKey]
+    }, PACT_COOLDOWN_MS) as any
+  }, [getPactCacheKey])
   const [deferred, setDeferred] = useState<{
     basket: BasketAccessRequest[],
     certificate: CertificateAccessRequest[],
@@ -318,6 +353,19 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   useEffect(() => {
     permissionsManagerRef.current = managers.permissionsManager;
   }, [managers.permissionsManager]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        for (const id of Object.values(pactCooldownTimerByCacheKeyRef.current)) {
+          window.clearTimeout(id)
+        }
+      } catch {
+        // ignore
+      }
+      pactCooldownTimerByCacheKeyRef.current = {}
+    }
+  }, [])
 
   const deferRequest = <T,>(key: keyof typeof deferred, item: T) => {
     setDeferred(prev => {
@@ -919,6 +967,55 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
           return res;
         };
       }
+
+      // ---- Proxy counterparty (PACT) grant/deny so we can force fallback to single prompts after deny/partial ----
+      const originalGrantCounterparty = (permissionsManager as any).grantCounterpartyPermission?.bind(permissionsManager)
+      const originalDenyCounterparty = (permissionsManager as any).denyCounterpartyPermission?.bind(permissionsManager)
+
+      const parsePactRequestId = (requestID: string): { originator?: string; counterparty?: string } => {
+        const m = /^pact:(.+):([0-9a-fA-F]{66})$/.exec(requestID)
+        if (!m) return {}
+        return { originator: m[1], counterparty: m[2] }
+      }
+
+      if (originalGrantCounterparty) {
+        (permissionsManager as any).grantCounterpartyPermission = async (...args: any[]) => {
+          const params =
+            args.length === 1 && args[0] && typeof args[0] === 'object' && 'requestID' in args[0]
+              ? args[0]
+              : { requestID: args[0], granted: args[1], expiry: args[2] }
+
+          const active = (permissionsManager as any).activeRequests?.get?.(params.requestID)
+          const requestedCount = active?.request?.permissions?.protocols?.length ?? 0
+          const grantedCount = params?.granted?.protocols?.length ?? 0
+          const parsed = parsePactRequestId(params.requestID)
+          const originator = active?.request?.originator ?? parsed.originator
+          const counterparty = active?.request?.counterparty ?? parsed.counterparty
+
+          const res = await originalGrantCounterparty(params)
+
+          if (originator && counterparty && requestedCount > 0 && grantedCount < requestedCount) {
+            startPactCooldown(originator, counterparty)
+          }
+          return res
+        }
+      }
+
+      if (originalDenyCounterparty) {
+        ;(permissionsManager as any).denyCounterpartyPermission = async (requestID: string) => {
+          const active = (permissionsManager as any).activeRequests?.get?.(requestID)
+          const parsed = parsePactRequestId(requestID)
+          const originator = active?.request?.originator ?? parsed.originator
+          const counterparty = active?.request?.counterparty ?? parsed.counterparty
+
+          const res = await originalDenyCounterparty(requestID)
+
+          if (originator && counterparty) {
+            startPactCooldown(originator, counterparty)
+          }
+          return res
+        }
+      }
       if (originalDismissGrouped) {
         (permissionsManager as any).dismissGroupedPermission = async (requestID: string) => {
           const res = await originalDismissGrouped(requestID);
@@ -973,7 +1070,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     spendingAuthorizationCallback,
     certificateAccessCallback,
     groupPermissionCallback,
-    counterpartyPermissionCallback
+    counterpartyPermissionCallback,
+    startPactCooldown
   ]);
 
 

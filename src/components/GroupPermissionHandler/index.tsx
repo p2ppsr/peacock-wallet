@@ -1,25 +1,32 @@
-import { useState, useEffect, useContext, useMemo } from 'react'
+import { useState, useEffect, useContext, useMemo, useCallback, type ReactNode } from 'react'
 import {
   DialogContent,
   DialogActions,
   Button,
   Typography,
   CircularProgress,
-  Stack,
+  Box,
   List,
   ListItem,
   ListItemIcon,
   ListItemText,
-  Divider
+  Divider,
+  Checkbox,
+  TextField,
+  FormControlLabel,
+  InputAdornment
 } from '@mui/material'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import CustomDialog from '../CustomDialog'
 import { WalletContext, WalletContextValue } from '../../WalletContext'
 import { UserContext, UserContextValue } from '../../UserContext'
+import AppChip from '../AppChip'
+import ProtoChip from '../ProtoChip'
+import BasketChip from '../BasketChip'
+import CounterpartyChip from '../CounterpartyChip'
 import AmountDisplay from '../AmountDisplay'
+import { ExchangeRateContext } from '../AmountDisplay/ExchangeRateContextProvider'
 import type { GroupedPermissions } from '@bsv/wallet-toolbox-client'
-import { PermissionHeader, RequestCard, InfoRow, Surface } from '../permissions/PermissionScaffold'
-import { getRegistryClient } from '../../utils/clientFactories'
 
 // Local type definitions for group permissions
 type ProtocolPermission = {
@@ -53,13 +60,42 @@ const GroupPermissionHandler = () => {
     groupPermissionRequests,
     advanceGroupQueue,
     managers,
-    settings,
-    clients
+    settings
   } = useContext<WalletContextValue>(WalletContext)
 
   const {
     groupPermissionModalOpen
   } = useContext<UserContextValue>(UserContext)
+
+  const rates = useContext<any>(ExchangeRateContext)
+  const { satoshisPerUSD, eurPerUSD, gbpPerUSD } = rates || {}
+
+  const rawCurrency: string = String(
+    (settings as any)?.currency ??
+    (settings as any)?.fiatCurrency ??
+    (settings as any)?.displayCurrency ??
+    ''
+  ).toUpperCase()
+
+  type Unit =
+    | { kind: 'sats' }
+    | { kind: 'bsv' }
+    | { kind: 'fiat'; code: 'USD' | 'EUR' | 'GBP' }
+
+  const unit: Unit = useMemo(() => {
+    if (/SAT/i.test(rawCurrency)) return { kind: 'sats' }
+    if (rawCurrency === 'BSV' || /BITCOIN/i.test(rawCurrency)) return { kind: 'bsv' }
+    if (rawCurrency === 'USD' || rawCurrency === 'EUR' || rawCurrency === 'GBP') return { kind: 'fiat', code: rawCurrency }
+    return { kind: 'sats' }
+  }, [rawCurrency])
+
+  const fiatRatesReady = useMemo(() => {
+    if (unit.kind !== 'fiat') return true
+    if (unit.code === 'USD') return !!satoshisPerUSD
+    if (unit.code === 'EUR') return !!satoshisPerUSD && !!eurPerUSD
+    if (unit.code === 'GBP') return !!satoshisPerUSD && !!gbpPerUSD
+    return false
+  }, [unit, satoshisPerUSD, eurPerUSD, gbpPerUSD])
 
   const [originator, setOriginator] = useState('')
   const [requestID, setRequestID] = useState<string | null>(null)
@@ -67,25 +103,138 @@ const GroupPermissionHandler = () => {
   const [protocolPermissions, setProtocolPermissions] = useState<ProtocolPermission[]>([])
   const [basketAccess, setBasketAccess] = useState<BasketAccess[]>([])
   const [certificateAccess, setCertificateAccess] = useState<CertificateAccess[]>([])
+  const [checkedProtocolKeys, setCheckedProtocolKeys] = useState<Set<string>>(new Set())
+  const [checkedBasketKeys, setCheckedBasketKeys] = useState<Set<string>>(new Set())
+  const [checkedCertificateKeys, setCheckedCertificateKeys] = useState<Set<string>>(new Set())
+  const [spendingEnabled, setSpendingEnabled] = useState<boolean>(false)
+  const [spendingAmount, setSpendingAmount] = useState<string>('')
+  const [spendingAmountSats, setSpendingAmountSats] = useState<number | null>(null)
+  const [spendingAmountDirty, setSpendingAmountDirty] = useState<boolean>(false)
   const [isGranting, setIsGranting] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
-  const [protocolNames, setProtocolNames] = useState<Record<string, string>>({})
-  const [basketNames, setBasketNames] = useState<Record<string, string>>({})
-  const [certificateNames, setCertificateNames] = useState<Record<string, string>>({})
-  const [counterpartyNames, setCounterpartyNames] = useState<Record<string, string>>({})
 
-  const registry = useMemo(
-    () => getRegistryClient(managers?.permissionsManager),
-    [managers?.permissionsManager]
-  )
+  const isPeerGroupedRequest = useMemo(() => {
+    if (!protocolPermissions.length) return false
+    if (basketAccess.length || certificateAccess.length || spendingAuthorization) return false
+    const allLevel2 = protocolPermissions.every(p => (p.protocolID?.[0] ?? 0) === 2)
+    if (!allLevel2) return false
+    const cps = new Set(protocolPermissions.map(p => p.counterparty ?? 'self'))
+    return cps.size === 1
+  }, [protocolPermissions, basketAccess, certificateAccess, spendingAuthorization])
+
+  const peerCounterparty = useMemo(() => {
+    if (!isPeerGroupedRequest) return null
+    return protocolPermissions[0]?.counterparty ?? 'self'
+  }, [isPeerGroupedRequest, protocolPermissions])
+
+  const peerCounterpartyDisplay = useMemo(() => {
+    if (!peerCounterparty) return null
+    if (peerCounterparty === 'self' || peerCounterparty === 'anyone') return peerCounterparty
+    if (peerCounterparty.length <= 16) return peerCounterparty
+    return `${peerCounterparty.slice(0, 8)}…${peerCounterparty.slice(-8)}`
+  }, [peerCounterparty])
+
+  const protocolKey = (p: ProtocolPermission) => {
+    const sec = p.protocolID?.[0] ?? 0
+    const name = p.protocolID?.[1] ?? ''
+    const cp = p.counterparty ?? 'self'
+    return sec === 2 ? `${name}|${cp}` : `${name}`
+  }
+
+  const basketKey = (b: BasketAccess) => b.basket
+
+  const certificateKey = (c: CertificateAccess) => {
+    const type = c.type ?? ''
+    const verifier = c.verifierPublicKey ?? ''
+    const fields = (c.fields ?? []).slice().sort().join('|')
+    return `${type}|${verifier}|${fields}`
+  }
+
+  const spendingAmountNumber = useMemo(() => {
+    const n = Number(spendingAmount)
+    return Number.isFinite(n) ? n : NaN
+  }, [spendingAmount])
+
+  const inputStep = useMemo(() => {
+    if (!fiatRatesReady && unit.kind === 'fiat') return 1
+    if (unit.kind === 'sats') return 1
+    if (unit.kind === 'bsv') return 0.00000001
+    return 0.01
+  }, [unit, fiatRatesReady])
+
+  const adornmentLabel = useMemo(() => {
+    if (!fiatRatesReady && unit.kind === 'fiat') return 'sats'
+    if (unit.kind === 'sats') return 'sats'
+    if (unit.kind === 'bsv') return 'BSV'
+    return unit.code === 'USD' ? '$' : unit.code === 'EUR' ? '€' : '£'
+  }, [unit, fiatRatesReady])
+
+  const satsToInput = useCallback((sats: number) => {
+    if (!fiatRatesReady && unit.kind === 'fiat') return sats
+    if (unit.kind === 'sats') return sats
+    if (unit.kind === 'bsv') return sats / 1e8
+
+    if (!satoshisPerUSD) return NaN
+    const usd = sats / satoshisPerUSD
+    if (unit.code === 'USD') return usd
+    if (unit.code === 'EUR') return eurPerUSD ? usd * eurPerUSD : NaN
+    if (unit.code === 'GBP') return gbpPerUSD ? usd * gbpPerUSD : NaN
+    return NaN
+  }, [unit, fiatRatesReady, satoshisPerUSD, eurPerUSD, gbpPerUSD])
+
+  const inputToSats = useCallback((amount: number) => {
+    if (!fiatRatesReady && unit.kind === 'fiat') return Math.round(amount)
+    if (unit.kind === 'sats') return Math.round(amount)
+    if (unit.kind === 'bsv') return Math.round(amount * 1e8)
+
+    if (!satoshisPerUSD) return NaN
+    let usd = amount
+    if (unit.code === 'EUR') {
+      if (!eurPerUSD) return NaN
+      usd = amount / eurPerUSD
+    } else if (unit.code === 'GBP') {
+      if (!gbpPerUSD) return NaN
+      usd = amount / gbpPerUSD
+    }
+    return Math.round(usd * satoshisPerUSD)
+  }, [unit, fiatRatesReady, satoshisPerUSD, eurPerUSD, gbpPerUSD])
+
+  const formatInputFromSats = useCallback((sats: number) => {
+    const trimZeros = (s: string) => s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
+    const v = satsToInput(sats)
+    if (!Number.isFinite(v)) return String(sats)
+
+    if (!fiatRatesReady && unit.kind === 'fiat') {
+      return String(Math.round(v))
+    }
+    if (unit.kind === 'sats') return String(Math.round(v))
+    if (unit.kind === 'bsv') return trimZeros(v.toFixed(8))
+
+    const abs = Math.abs(v)
+    if (abs > 0 && abs < 1) {
+      const e = Math.floor(Math.log10(abs))
+      const decimals = Math.min(12, Math.max(2, 3 - 1 - e))
+      return trimZeros(v.toFixed(decimals))
+    }
+
+    return trimZeros(v.toFixed(2))
+  }, [satsToInput, unit, fiatRatesReady])
+
+  useEffect(() => {
+    if (!spendingAuthorization) return
+    if (spendingAmountDirty) return
+    if (typeof spendingAmountSats !== 'number' || !Number.isFinite(spendingAmountSats)) return
+    const next = formatInputFromSats(spendingAmountSats)
+    setSpendingAmount(prev => (prev === next ? prev : next))
+  }, [spendingAuthorization, spendingAmountDirty, spendingAmountSats, formatInputFromSats])
 
   const handleCancel = async () => {
-    // Deny the current group permission request
+    // Dismiss the current group permission request so we fall back to individual prompts
     if (requestID) {
       try {
-        await managers?.permissionsManager.denyGroupedPermission(requestID)
+        await (managers?.permissionsManager as any)?.dismissGroupedPermission?.(requestID)
       } catch (error) {
-        console.error('Error denying group permission:', error)
+        console.error('Error dismissing group permission:', error)
       }
     }
 
@@ -95,17 +244,25 @@ const GroupPermissionHandler = () => {
   const handleGrant = async () => {
     setIsGranting(true)
     try {
-      // Grant ALL permissions - no selective granting
+      // Grant only the checked items. Unchecked items fall back to individual prompts.
       const granted: Partial<GroupedPermissions> = {
-        protocolPermissions: protocolPermissions as any,
-        basketAccess: basketAccess as any,
-        certificateAccess: certificateAccess as any
+        protocolPermissions: protocolPermissions.filter(p => checkedProtocolKeys.has(protocolKey(p))) as any,
+        basketAccess: basketAccess.filter(b => checkedBasketKeys.has(basketKey(b))) as any,
+        certificateAccess: certificateAccess.filter(c => checkedCertificateKeys.has(certificateKey(c))) as any
       }
 
-      if (spendingAuthorization) {
-        granted.spendingAuthorization = spendingAuthorization as any
+      if (spendingAuthorization && spendingEnabled) {
+        if (typeof spendingAmountSats !== 'number' || !Number.isFinite(spendingAmountSats) || spendingAmountSats < 0) {
+          setIsGranting(false)
+          return
+        }
+        granted.spendingAuthorization = {
+          amount: spendingAmountSats,
+          description: spendingAuthorization.description
+        } as any
       }
 
+      let grantedSuccessfully = false
       if (requestID) {
         try {
           await managers?.permissionsManager.grantGroupedPermission({
@@ -113,199 +270,99 @@ const GroupPermissionHandler = () => {
             granted: granted as GroupedPermissions,
             expiry: 0 // Never expires
           })
+          grantedSuccessfully = true
         } catch (error) {
           console.error('Error granting group permission:', error)
         }
       }
 
-      advanceGroupQueue()
+      if (grantedSuccessfully) {
+        try {
+          const normOriginator = originator ? originator.replace(/^https?:\/\//, '') : originator
+          if ((granted as any)?.protocolPermissions?.length) {
+            window.dispatchEvent(new CustomEvent('protocol-permissions-changed', { detail: { op: 'grant-group', originator: normOriginator } }))
+          }
+          if ((granted as any)?.basketAccess?.length) {
+            window.dispatchEvent(new CustomEvent('basket-access-changed', { detail: { op: 'grant-group', originator: normOriginator } }))
+          }
+          if ((granted as any)?.certificateAccess?.length) {
+            window.dispatchEvent(new CustomEvent('cert-access-changed', { detail: { op: 'grant-group', originator: normOriginator } }))
+          }
+          if ((granted as any)?.spendingAuthorization) {
+            window.dispatchEvent(new CustomEvent('spending-authorization-changed', { detail: { op: 'grant-group', originator: normOriginator } }))
+          }
+        } catch {
+          // ignore
+        }
+        advanceGroupQueue()
+      }
     } finally {
       setIsGranting(false)
     }
   }
 
-useEffect(() => {
-    let cancelled = false
+  useEffect(() => {
     // Monitor the group permission requests from the wallet context
     if (groupPermissionRequests && groupPermissionRequests.length > 0) {
       // Get the first group permission request
-      const currentRequest = groupPermissionRequests[0]
+      const currentRequest = groupPermissionRequests[0] as any
+
+      if ((currentRequest as any)?.requestID && (currentRequest as any).requestID === requestID) {
+        return
+      }
 
       // Process the current request
       const processRequest = async () => {
         try {
-          // Ensure we have proper typing for the current request
           const { requestID, originator, permissions } = currentRequest
-          // Use the permissions property from the request as our groupPermissions
           const groupPermissions = permissions || {
             protocolPermissions: [],
             basketAccess: [],
             certificateAccess: []
           }
 
-          // Set the request ID
           setRequestID(requestID)
-
-          // Set the originator
           setOriginator(originator || '')
-
-          // Reset details visibility for new request
           setShowDetails(false)
 
-          // Set protocol permissions
-          setProtocolPermissions(
-            (groupPermissions?.protocolPermissions) || []
-          )
+          const newProtocolPermissions = (groupPermissions?.protocolPermissions) || []
+          setProtocolPermissions(newProtocolPermissions)
+          setCheckedProtocolKeys(new Set(newProtocolPermissions.map(protocolKey)))
 
-          // Set basket access permissions
-          setBasketAccess(
-            (groupPermissions?.basketAccess) || []
-          )
+          const newBasketAccess = (groupPermissions?.basketAccess) || []
+          setBasketAccess(newBasketAccess)
+          setCheckedBasketKeys(new Set(newBasketAccess.map(basketKey)))
 
-          // Set certificate access permissions
-          setCertificateAccess(
-            (groupPermissions?.certificateAccess)
-              ? groupPermissions.certificateAccess.map(x => ({
-                ...x,
-                fields: Array.isArray(x.fields)
-                  ? x.fields
-                  : x.fields
-                    ? Object.keys(x.fields)
-                    : []
-              }))
-              : []
-          )
+          const newCertificateAccess = (groupPermissions?.certificateAccess)
+            ? groupPermissions.certificateAccess.map((x: CertificateAccess) => ({
+              ...x,
+              fields: Array.isArray(x.fields)
+                ? x.fields
+                : x.fields
+                  ? Object.keys(x.fields)
+                  : []
+            }))
+            : []
+          setCertificateAccess(newCertificateAccess)
+          setCheckedCertificateKeys(new Set(newCertificateAccess.map(certificateKey)))
 
-          // Set spending authorization
           setSpendingAuthorization(groupPermissions?.spendingAuthorization)
+          setSpendingEnabled(!!groupPermissions?.spendingAuthorization)
+          setSpendingAmountDirty(false)
+          if (groupPermissions?.spendingAuthorization) {
+            const sats = Number(groupPermissions.spendingAuthorization.amount)
+            setSpendingAmountSats(Number.isFinite(sats) ? sats : null)
+            setSpendingAmount(Number.isFinite(sats) ? formatInputFromSats(sats) : String(groupPermissions.spendingAuthorization.amount))
+          } else {
+            setSpendingAmountSats(null)
+            setSpendingAmount('')
+          }
         } catch (e) {
           console.error('Error processing group permission request:', e)
         }
       }
 
       processRequest()
-      // Resolve registry/identity names for current request
-      const resolveMetadata = async () => {
-        // Protocol names
-        if (registry && settings?.trustSettings && currentRequest.permissions?.protocolPermissions?.length) {
-          const trusted = settings.trustSettings.trustedCertifiers.map(x => x.identityKey)
-          const entries = currentRequest.permissions.protocolPermissions
-          const updates: Record<string, string> = {}
-          for (const p of entries) {
-            const key = `${p.protocolID[0]}|${p.protocolID[1]}`
-            if (protocolNames[key]) continue
-            try {
-              const results = await registry.resolve('protocol', {
-                protocolID: [p.protocolID[0] as any, p.protocolID[1]],
-                registryOperators: trusted
-              })
-              if (results && results.length) {
-                let best = 0
-                let idx = 0
-                for (let i = 0; i < results.length; i++) {
-                  const trust = settings.trustSettings.trustedCertifiers.find(x => x.identityKey === results[i].registryOperator)?.trust || 0
-                  if (trust > best) {
-                    best = trust
-                    idx = i
-                  }
-                }
-                updates[key] = results[idx]?.name || p.protocolID[1]
-              }
-            } catch (err) {
-              // ignore resolution failure
-            }
-          }
-          if (!cancelled && Object.keys(updates).length) {
-            setProtocolNames(prev => ({ ...prev, ...updates }))
-          }
-        }
-
-        // Basket names
-        if (registry && settings?.trustSettings && currentRequest.permissions?.basketAccess?.length) {
-          const trusted = settings.trustSettings.trustedCertifiers.map(x => x.identityKey)
-          const updates: Record<string, string> = {}
-          for (const b of currentRequest.permissions.basketAccess) {
-            if (basketNames[b.basket]) continue
-            try {
-              const results = await registry.resolve('basket', {
-                basketID: b.basket,
-                registryOperators: trusted
-              })
-              if (results && results.length) {
-                let best = 0
-                let idx = 0
-                for (let i = 0; i < results.length; i++) {
-                  const trust = settings.trustSettings.trustedCertifiers.find(x => x.identityKey === results[i].registryOperator)?.trust || 0
-                  if (trust > best) {
-                    best = trust
-                    idx = i
-                  }
-                }
-                updates[b.basket] = results[idx]?.name || b.basket
-              }
-            } catch (err) {
-              // ignore
-            }
-          }
-          if (!cancelled && Object.keys(updates).length) {
-            setBasketNames(prev => ({ ...prev, ...updates }))
-          }
-        }
-
-        // Certificate names
-        if (registry && settings?.trustSettings && currentRequest.permissions?.certificateAccess?.length) {
-          const trusted = settings.trustSettings.trustedCertifiers.map(x => x.identityKey)
-          const updates: Record<string, string> = {}
-          for (const c of currentRequest.permissions.certificateAccess) {
-            if (certificateNames[c.type]) continue
-            try {
-              const results = await registry.resolve('certificate', {
-                type: c.type,
-                registryOperators: trusted
-              })
-              if (results && results.length) {
-                let best = 0
-                let idx = 0
-                for (let i = 0; i < results.length; i++) {
-                  const trust = settings.trustSettings.trustedCertifiers.find(x => x.identityKey === results[i].registryOperator)?.trust || 0
-                  if (trust > best) {
-                    best = trust
-                    idx = i
-                  }
-                }
-                updates[c.type] = results[idx]?.name || c.type
-              }
-            } catch (err) {
-              // ignore
-            }
-          }
-          if (!cancelled && Object.keys(updates).length) {
-            setCertificateNames(prev => ({ ...prev, ...updates }))
-          }
-        }
-
-        // Counterparty names (identity)
-        if (clients?.identityClient && currentRequest.permissions?.protocolPermissions?.length) {
-          const updates: Record<string, string> = {}
-          for (const p of currentRequest.permissions.protocolPermissions) {
-            const key = p.counterparty
-            if (!key || counterpartyNames[key]) continue
-            try {
-              const results = await clients.identityClient.resolveByIdentityKey({ identityKey: key })
-              if (results && results.length) {
-                updates[key] = results[0]?.name || key
-              }
-            } catch (err) {
-              // ignore
-            }
-          }
-          if (!cancelled && Object.keys(updates).length) {
-            setCounterpartyNames(prev => ({ ...prev, ...updates }))
-          }
-        }
-
-      }
-      resolveMetadata()
     } else {
       // Reset the dialog when there are no requests
       setOriginator('')
@@ -314,166 +371,313 @@ useEffect(() => {
       setProtocolPermissions([])
       setBasketAccess([])
       setCertificateAccess([])
+      setCheckedProtocolKeys(new Set())
+      setCheckedBasketKeys(new Set())
+      setCheckedCertificateKeys(new Set())
+      setSpendingEnabled(false)
+      setSpendingAmount('')
+      setSpendingAmountSats(null)
+      setSpendingAmountDirty(false)
       setShowDetails(false)
     }
-    return () => { cancelled = true }
-  }, [groupPermissionRequests, advanceGroupQueue, registry, settings?.trustSettings, protocolNames, basketNames, certificateNames, counterpartyNames, clients?.identityClient])
+  }, [groupPermissionRequests, advanceGroupQueue, requestID, formatInputFromSats])
+
+  const handleDialogClose = (_event: any, reason?: string) => {
+    if (reason === 'backdropClick' || reason === 'escapeKeyDown') return
+    handleCancel()
+  }
 
   // Helper to generate permission summary text
   const getPermissionSummary = () => {
-    const items: string[] = []
+    const items: ReactNode[] = []
+    if (isPeerGroupedRequest && peerCounterpartyDisplay) items.push(`Trust peer ${peerCounterpartyDisplay}`)
     if (protocolPermissions.length > 0) items.push('Use your wallet identity to sign and encrypt data')
     if (basketAccess.length > 0) items.push('Store and access data in your wallet')
     if (certificateAccess.length > 0) items.push('View your identity credentials')
-    if (spendingAuthorization) items.push(`Spend up to ${spendingAuthorization.amount}`)
+    if (spendingAuthorization) {
+      items.push(
+        <span>
+          Spend up to <AmountDisplay showFiatAsInteger>{spendingAuthorization.amount}</AmountDisplay>
+        </span>
+      )
+    }
     return items
   }
 
   // Generate app-specific context message
   const getContextMessage = () => {
     const appName = originator || 'This app'
+    if (isPeerGroupedRequest && peerCounterpartyDisplay) {
+      return `${appName} wants you to trust a specific counterparty (${peerCounterpartyDisplay}) for the permissions below.`
+    }
     return `${appName} wants to use your wallet to manage identity, data, and transactions.`
   }
 
   return (
     <CustomDialog
       open={groupPermissionModalOpen && groupPermissionRequests.length > 0}
-      onClose={handleCancel}
+      onClose={handleDialogClose}
       maxWidth='md'
       fullWidth
-      title='Permission needed'
+      title={isPeerGroupedRequest ? 'Trust This Peer?' : 'App Permissions Request'}
     >
       <DialogContent>
-        <Stack spacing={2}>
-          <PermissionHeader
-            appDomain={originator || 'Unknown app'}
-            contextLine="wants broad access to your wallet"
-          />
-
-          <RequestCard
-            title="What this app is asking for"
-            body={getContextMessage()}
-          />
-
-          <Surface>
-            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
-              This allows it to:
-            </Typography>
-
-            <List sx={{ mb: 0, py: 0 }}>
-              {getPermissionSummary().map((item, i) => (
-                <ListItem key={i} sx={{ py: 1 }}>
-                  <ListItemIcon>
-                    <CheckCircleOutlineIcon color="primary" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={item}
-                    primaryTypographyProps={{ variant: 'body1' }}
+        <Box sx={{ textAlign: 'center', mb: 3 }}>
+          {originator && (
+            <AppChip
+              size={2.5}
+              showDomain
+              label={originator}
+              clickable={false}
+            />
+          )}
+          {isPeerGroupedRequest && peerCounterpartyDisplay && (
+            <Box sx={{ mt: 1 }}>
+              <Typography variant='caption' color='text.secondary'>
+                Counterparty
+              </Typography>
+              {peerCounterparty && (
+                <Box sx={{ mt: 0.25, display: 'flex', justifyContent: 'center' }}>
+                  <CounterpartyChip
+                    counterparty={peerCounterparty}
+                    clickable={false}
+                    layout="compact"
                   />
-                </ListItem>
-              ))}
-            </List>
-          </Surface>
-
-          {spendingAuthorization && (
-            <Surface sx={{ bgcolor: 'action.hover' }}>
-              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                Spending without prompts
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Spend up to <AmountDisplay abbreviate>{spendingAuthorization.amount}</AmountDisplay> without additional confirmation.
-              </Typography>
-            </Surface>
+                </Box>
+              )}
+            </Box>
           )}
+        </Box>
 
-          {(protocolPermissions.length > 0 || certificateAccess.length > 0 || basketAccess.length > 0) && (
-            <>
-              <Divider sx={{ my: 1 }} />
-              <Button
-                onClick={() => setShowDetails(!showDetails)}
-                size="small"
-                sx={{ textTransform: 'none', alignSelf: 'flex-start' }}
-              >
-                {showDetails ? 'Hide details' : 'Show what exactly will be shared'}
-              </Button>
-            </>
-          )}
+        <Typography variant='body1' sx={{ mb: 3, color: 'text.primary', lineHeight: 1.6 }}>
+          {getContextMessage()}
+        </Typography>
 
-          {showDetails && (
-            <Stack spacing={2}>
-              {protocolPermissions.length > 0 && (
-                <Surface>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Protocol access ({protocolPermissions.length})
-                  </Typography>
-                  <Stack spacing={1}>
-                    {protocolPermissions.map((x, i) => {
-                      const key = `${x.protocolID[0]}|${x.protocolID[1]}`
-                      const protocolLabel = protocolNames[key] || x.protocolID[1]
-                      const counterpartyLabel = x.counterparty ? (counterpartyNames[x.counterparty] || x.counterparty) : null
-                      return (
-                        <InfoRow
-                          key={i}
-                          label={x.description || 'Protocol'}
-                          value={`${protocolLabel} • security ${x.protocolID[0]}${counterpartyLabel ? ` • ${counterpartyLabel}` : ''}`}
-                        />
+        <Typography variant='subtitle2' sx={{ mb: 2, fontWeight: 600 }}>
+          This allows it to:
+        </Typography>
+
+        <List sx={{ mb: 2 }}>
+          {getPermissionSummary().map((item, i) => (
+            <ListItem key={i} sx={{ py: 1.5 }}>
+              <ListItemIcon>
+                <CheckCircleOutlineIcon color='primary' />
+              </ListItemIcon>
+              <ListItemText primary={item} primaryTypographyProps={{ variant: 'body1' }} />
+            </ListItem>
+          ))}
+        </List>
+
+        {spendingAuthorization && (
+          <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
+            <Typography variant='subtitle2' sx={{ mb: 0.5 }}>
+              Spending Authorization
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={spendingEnabled}
+                  onChange={(e) => setSpendingEnabled(e.target.checked)}
+                />
+              }
+              label='Enable automatic spending'
+            />
+            {spendingEnabled && (
+              <Box sx={{ mt: 1 }}>
+                <TextField
+                  label={!fiatRatesReady && unit.kind === 'fiat' ? 'Max satoshis' : unit.kind === 'fiat' ? `Max ${unit.code}` : unit.kind === 'bsv' ? 'Max BSV' : 'Max satoshis'}
+                  type='number'
+                  value={spendingAmount}
+                  onChange={(e) => {
+                    const next = e.target.value
+                    setSpendingAmount(next)
+                    setSpendingAmountDirty(true)
+                    const n = Number(next)
+                    if (!Number.isFinite(n)) {
+                      setSpendingAmountSats(null)
+                      return
+                    }
+                    const sats = inputToSats(n)
+                    setSpendingAmountSats(Number.isFinite(sats) ? sats : null)
+                  }}
+                  fullWidth
+                  inputProps={{ min: 0, step: inputStep }}
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">{adornmentLabel}</InputAdornment>
+                  }}
+                  helperText={
+                    Number.isFinite(spendingAmountNumber) && typeof spendingAmountSats === 'number' && Number.isFinite(spendingAmountSats)
+                      ? (
+                        <>
+                          Spend up to <AmountDisplay showFiatAsInteger>{spendingAmountSats}</AmountDisplay> without additional confirmation
+                        </>
                       )
-                    })}
-                  </Stack>
-                </Surface>
-              )}
+                      : 'Enter a valid number'
+                  }
+                  error={spendingEnabled && (!Number.isFinite(spendingAmountNumber) || spendingAmountNumber < 0 || typeof spendingAmountSats !== 'number' || !Number.isFinite(spendingAmountSats))}
+                />
+              </Box>
+            )}
+          </Box>
+        )}
 
-              {certificateAccess.length > 0 && (
-                <Surface>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Certificate access ({certificateAccess.length})
-                  </Typography>
-                  <Stack spacing={1}>
-                    {certificateAccess.map((x, i) => (
-                      <InfoRow
-                        key={i}
-                        label={certificateNames[x.type] || x.type}
-                        value={x.description || 'Will read this credential'}
-                      />
-                    ))}
-                  </Stack>
-                </Surface>
-              )}
+        <Divider sx={{ my: 2 }} />
 
-              {basketAccess.length > 0 && (
-                <Surface>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Basket access ({basketAccess.length})
-                  </Typography>
-                  <Stack spacing={1}>
-                    {basketAccess.map((x, i) => (
-                      <InfoRow
-                        key={i}
-                        label={basketNames[x.basket] || x.basket}
-                        value={x.description || 'Read and write data in this basket'}
-                      />
-                    ))}
-                  </Stack>
-                </Surface>
-              )}
-            </Stack>
-          )}
-        </Stack>
+        <Button
+          onClick={() => setShowDetails(s => !s)}
+          variant='text'
+          size='small'
+        >
+          {showDetails ? 'Hide details' : 'Show details'}
+        </Button>
+
+        {showDetails && (
+          <Box sx={{ mt: 1 }}>
+            {protocolPermissions.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant='subtitle2' gutterBottom>
+                  Protocol Access ({protocolPermissions.length})
+                </Typography>
+                {protocolPermissions.map((x, i) => (
+                  <Box key={i} sx={{ ml: 2, mb: 1 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={checkedProtocolKeys.has(protocolKey(x))}
+                          onChange={(e) => {
+                            const key = protocolKey(x)
+                            setCheckedProtocolKeys(prev => {
+                              const next = new Set(prev)
+                              if (e.target.checked) next.add(key)
+                              else next.delete(key)
+                              return next
+                            })
+                          }}
+                        />
+                      }
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <ProtoChip
+                            protocolID={x.protocolID[1]}
+                            securityLevel={x.protocolID[0]}
+                            counterparty={x.counterparty}
+                            clickable={false}
+                            canRevoke={false}
+                            layout="compact"
+                          />
+                          {x.protocolID?.[0] === 2 && x.counterparty && (
+                            <CounterpartyChip counterparty={x.counterparty} clickable={false} size={1.0} layout="compact" />
+                          )}
+                          {x.description && (
+                            <Typography variant='caption' color='text.secondary'>
+                              — {x.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </Box>
+                ))}
+              </Box>
+            )}
+
+            {certificateAccess.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant='subtitle2' gutterBottom>
+                  Certificate Access ({certificateAccess.length})
+                </Typography>
+                {certificateAccess.map((x, i) => (
+                  <Box key={i} sx={{ ml: 2, mb: 1 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={checkedCertificateKeys.has(certificateKey(x))}
+                          onChange={(e) => {
+                            const key = certificateKey(x)
+                            setCheckedCertificateKeys(prev => {
+                              const next = new Set(prev)
+                              if (e.target.checked) next.add(key)
+                              else next.delete(key)
+                              return next
+                            })
+                          }}
+                        />
+                      }
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <Typography variant='body2' sx={{ fontWeight: 600 }}>
+                            {x.type}
+                          </Typography>
+                          {x.verifierPublicKey && (
+                            <CounterpartyChip counterparty={x.verifierPublicKey} clickable={false} size={1.0} layout="compact" />
+                          )}
+                          {x.description && (
+                            <Typography variant='caption' color='text.secondary'>
+                              — {x.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </Box>
+                ))}
+              </Box>
+            )}
+
+            {basketAccess.length > 0 && (
+              <Box sx={{ mb: 2 }}>
+                <Typography variant='subtitle2' gutterBottom>
+                  Basket Access ({basketAccess.length})
+                </Typography>
+                {basketAccess.map((x, i) => (
+                  <Box key={i} sx={{ ml: 2, mb: 1 }}>
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={checkedBasketKeys.has(basketKey(x))}
+                          onChange={(e) => {
+                            const key = basketKey(x)
+                            setCheckedBasketKeys(prev => {
+                              const next = new Set(prev)
+                              if (e.target.checked) next.add(key)
+                              else next.delete(key)
+                              return next
+                            })
+                          }}
+                        />
+                      }
+                      label={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <BasketChip basketId={x.basket} clickable={false} canRevoke={false} layout="compact" />
+                          {x.description && (
+                            <Typography variant='caption' color='text.secondary'>
+                              — {x.description}
+                            </Typography>
+                          )}
+                        </Box>
+                      }
+                    />
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+        )}
       </DialogContent>
       <DialogActions
         style={{
-          justifyContent: 'space-between',
+          justifyContent: 'space-around',
           padding: '1em',
           flex: 'none'
         }}
       >
         <Button
           onClick={handleCancel}
-          variant='text'
+          variant='outlined'
           disabled={isGranting}
           size='large'
         >
-          No, keep blocked
+          Deny
         </Button>
         <Button
           variant='contained'
@@ -483,7 +687,7 @@ useEffect(() => {
           startIcon={isGranting ? <CircularProgress size={16} color='inherit' /> : undefined}
           size='large'
         >
-          {isGranting ? 'Granting...' : 'Allow everything'}
+          {isGranting ? 'Granting...' : isPeerGroupedRequest ? 'Trust Peer' : 'Allow Access'}
         </Button>
       </DialogActions>
     </CustomDialog>
