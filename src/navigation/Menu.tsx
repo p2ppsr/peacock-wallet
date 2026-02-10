@@ -1,5 +1,4 @@
 import {
-  Apps as BrowseIcon,
   Settings as SettingsIcon,
   Badge as IdentityIcon,
 } from '@mui/icons-material'
@@ -141,7 +140,6 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
     }
   }, [menuOpen])
 
-  const isAppsSelected = location.pathname === '/dashboard/apps' || location.pathname === '/dashboard/recent-apps'
   const isPaymentsSelected = location.pathname === '/dashboard/payments' || location.pathname === '/dashboard/transfer'
   const isHomeSelected = location.pathname === '/dashboard/home' || location.pathname === '/dashboard' || location.pathname === '/dashboard/'
 
@@ -199,26 +197,6 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
                   fontWeight={isHomeSelected ? 600 : 400}
                 >
                   Home
-                </Typography>
-              }
-            />
-          </ListItemButton>
-
-          <ListItemButton
-            onClick={() => navigation.push('/dashboard/apps')}
-            selected={isAppsSelected}
-            sx={menuItemStyle(isAppsSelected)}
-          >
-            <ListItemIcon sx={{ minWidth: 40, color: isAppsSelected ? 'primary.main' : 'inherit' }}>
-              <BrowseIcon />
-            </ListItemIcon>
-            <ListItemText
-              primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={isAppsSelected ? 600 : 400}
-                >
-                  Apps
                 </Typography>
               }
             />

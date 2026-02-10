@@ -20,6 +20,7 @@ import AppsRoundedIcon from '@mui/icons-material/AppsRounded'
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded'
 import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded'
 import LaunchRoundedIcon from '@mui/icons-material/LaunchRounded'
+import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded'
 import { openUrl } from '../../utils/openUrl'
 import CustomDialog from '../../components/CustomDialog'
 import { WalletContext } from '../../WalletContext'
@@ -75,7 +76,7 @@ export default function Home() {
     title: 'Launch Apps',
     description: 'Enter the ecosystem. Browse and launch apps built for your identity.',
     icon: <AppsRoundedIcon sx={{ fontSize: 48 }} />, // Larger Icon
-    onClick: () => navigate('/dashboard/apps')
+    onClick: () => { void openUrl('https://metanetapps.com') }
   }), [navigate])
 
   // 2. The remaining "Control Panel" actions
@@ -241,25 +242,69 @@ export default function Home() {
                   </Typography>
                   
                   {/* Fake "Button" for visual affordance */}
-                  <Box 
-                    sx={{ 
-                      mt: 2, 
-                      py: 1, 
-                      px: 3, 
-                      background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-                      color: theme.palette.common.white, 
-                      borderRadius: 50, 
-                      fontWeight: 'bold',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1,
-                      textTransform: 'uppercase',
-                      fontSize: '0.85rem',
-                      letterSpacing: '0.05em'
-                    }}
-                  >
-                    Open Portal <LaunchRoundedIcon fontSize="small" />
-                  </Box>
+                  <Stack direction="row" spacing={1.25} sx={{ mt: 2, alignItems: 'center' }}>
+                    <Box
+                      sx={{
+                        py: 1,
+                        px: 3,
+                        background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+                        color: theme.palette.common.white,
+                        borderRadius: 50,
+                        fontWeight: 'bold',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        textTransform: 'uppercase',
+                        fontSize: '0.85rem',
+                        letterSpacing: '0.05em'
+                      }}
+                    >
+                      Open Portal <LaunchRoundedIcon fontSize="small" />
+                    </Box>
+
+                    <Box
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        navigate('/dashboard/recent-apps')
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          navigate('/dashboard/recent-apps')
+                        }
+                      }}
+                      sx={{
+                        py: 1,
+                        px: 2.25,
+                        borderRadius: 50,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1,
+                        textTransform: 'uppercase',
+                        fontSize: '0.85rem',
+                        letterSpacing: '0.05em',
+                        border: `1px solid ${alpha(theme.palette.primary.main, isLight ? 0.25 : 0.45)}`,
+                        backgroundColor: alpha(theme.palette.background.paper, isLight ? 0.7 : 0.08),
+                        color: theme.palette.text.primary,
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                        '&:hover': {
+                          backgroundColor: alpha(theme.palette.primary.main, isLight ? 0.08 : 0.18)
+                        },
+                        '&:focus-visible': {
+                          outline: `2px solid ${theme.palette.primary.main}`,
+                          outlineOffset: 2
+                        }
+                      }}
+                    >
+                      Recent Apps <HistoryRoundedIcon fontSize="small" />
+                    </Box>
+                  </Stack>
                 </Stack>
               </Stack>
             </CardActionArea>

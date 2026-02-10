@@ -10,7 +10,6 @@ import {
   Container,
   TextField,
   FormControl,
-  Button,
   Box,
   Divider,
   Fade,
@@ -18,11 +17,9 @@ import {
 } from '@mui/material'
 import Grid2 from '@mui/material/Grid2'
 import SearchIcon from '@mui/icons-material/Search'
-import ExploreIcon from '@mui/icons-material/Explore'
 import PushPinIcon from '@mui/icons-material/PushPin'
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined'
 import Fuse from 'fuse.js'
-import { useNavigate } from 'react-router-dom'
 
 import style from './style'
 import UserWalletApp from '../../../components/UserWalletApp'
@@ -33,7 +30,6 @@ import useSxStyles from '../../../utils/useSxStyles'
 
 const Apps: React.FC = () => {
   const styles = useSxStyles(style)
-  const navigate = useNavigate()
   const inputRef = useRef<HTMLInputElement>(null)
   const { managers, activeProfile, setActiveProfile } = useContext(WalletContext)
 
@@ -126,9 +122,6 @@ const Apps: React.FC = () => {
       inputRef.current.focus()
     }
   }
-  const handleViewCatalog = () => {
-    navigate('/dashboard/app-catalog')
-  }
 
   // On mount, load the apps & recent apps
   useEffect(() => {
@@ -205,21 +198,11 @@ const Apps: React.FC = () => {
         }}
       >
         <Typography variant="h1" color="textPrimary" sx={{ mb: 2 }}>
-          Apps
+          Recent Apps
         </Typography>
         <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
           Browse and manage your application permissions.
         </Typography>
-
-        {/* View App Catalog Button */}
-        <Button
-          variant="outlined"
-          startIcon={<ExploreIcon />}
-          onClick={handleViewCatalog}
-          sx={{ mb: 2 }}
-        >
-          View App Catalog
-        </Button>
 
         <FormControl sx={{
           width: '100%',
