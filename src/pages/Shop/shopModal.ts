@@ -712,7 +712,7 @@ export async function showSatoshiShopPendingTransactionsModal(
   if (!IN_BROWSER) return;
 
   const opts = resolveFundingOptions(options);
-  const shopClient = new SatoshiShopClient(wallet, opts.satoshiShopUrl);
+  const shopClient = new SatoshiShopClient(wallet as any, opts.satoshiShopUrl);
 
   await new Promise<void>((resolve) => {
     const root = overlayRoot(mount);
@@ -956,7 +956,7 @@ export async function showSatoshiShopFundingModal(
   const shouldAutoRetry = satoshisNeeded > 0;
 
   const opts = resolveFundingOptions(options);
-  const shopClient = new SatoshiShopClient(wallet, opts.satoshiShopUrl);
+  const shopClient = new SatoshiShopClient(wallet as any, opts.satoshiShopUrl);
 
   return await new Promise<'cancel' | 'retry'>((resolve) => {
     const ctx = setupContext();

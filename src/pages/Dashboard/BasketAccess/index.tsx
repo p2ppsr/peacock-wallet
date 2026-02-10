@@ -112,7 +112,7 @@ const BasketAccess = () => {
 
         const outputs = outputsResult.outputs as WalletOutput[];
         setItems(outputs);
-        setAggregatedBeef(outputsResult.BEEF ?? null);
+        setAggregatedBeef(outputsResult.BEEF as number[] ?? null);
         setTotalOutputsCount(outputsResult.totalOutputs ?? outputs.length);
 
         if (locationState?.id === basketId) {
