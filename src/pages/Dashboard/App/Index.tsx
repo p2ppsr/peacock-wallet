@@ -18,7 +18,7 @@ import {
 import CheckIcon from '@mui/icons-material/Check'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { WalletContext } from '../../../WalletContext'
 import { WalletAction } from '@bsv/sdk'
@@ -111,6 +111,7 @@ interface LocationState {
 const App: React.FC = () => {
   /* ---------- Router & persisted params -------------------------- */
   const location = useLocation()
+  const navigate = useNavigate()
   const state = location.state as LocationState | null
   const initialDomain =
     state?.domain || sessionStorage.getItem('lastAppDomain') || 'unknown.com'
@@ -156,6 +157,11 @@ const App: React.FC = () => {
   /* ---------- Derived values ------------------------------------ */
   const url = useMemo(
     () => (appDomain.startsWith('http') ? appDomain : `https://${appDomain}`),
+    [appDomain],
+  )
+
+  const manageAppPath = useMemo(
+    () => `/dashboard/manage-app/${encodeURIComponent(appDomain)}`,
     [appDomain],
   )
 
@@ -394,6 +400,11 @@ const App: React.FC = () => {
           buttonTitle="Launch"
           buttonIcon={<OpenInNewIcon />}
           onClick={() => void openUrl(url)}
+          showSecondaryButton
+          secondaryButtonTitle="Manage App"
+          secondaryButtonVariant="text"
+          secondaryButtonSize="medium"
+          onSecondaryClick={() => navigate(manageAppPath)}
         />
       </Grid>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useContext, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   List,
@@ -29,6 +29,10 @@ import CounterpartyChip from '../CounterpartyChip';
 import { WalletContext } from '../../WalletContext';
 import { PermissionToken } from '@bsv/wallet-toolbox-client';
 import AppLogo from '../AppLogo';
+
+const sleep = (ms: number) => new Promise<void>(resolve => window.setTimeout(resolve, ms))
+
+type RevokedOutpoint = { txid?: string; outputIndex?: number; counterparty?: string };
 /* -------------------------------------------------------------------------- */
 /*                              Types & Helpers                               */
 /* -------------------------------------------------------------------------- */
@@ -212,6 +216,12 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
   const [toRevoke, setToRevoke] = useState<PermissionToken | PermissionGroup | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const refreshDebounceRef = useRef<number | null>(null)
+  const verifyRefreshRunIdRef = useRef(0)
+  const lastRawSignatureRef = useRef<string>('')
+  const recentlyRevokedRef = useRef<Map<string, number>>(new Map())
+  const REVOKE_TTL_MS = 2 * 60 * 1000
+
   /* ----------------------------- Context ------------------------------ */
   const { managers } = useContext(WalletContext);
 
@@ -219,11 +229,18 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
   const navigate = useNavigate();
 
   /* ---------------------------  Helpers  ----------------------------- */
-  const refreshPerms = useCallback(async () => {
+  const signatureFromPermissions = useCallback((tokens: PermissionToken[]) => {
+    return tokens
+      .map(p => `${p.txid}.${p.outputIndex}.${p.counterparty ?? ''}`)
+      .sort()
+      .join('|')
+  }, [])
+
+  const refreshPerms = useCallback(async (opts?: { force?: boolean }) => {
     if (!managers?.permissionsManager) return;
 
     // Return cached results if present
-    if (PERM_CACHE.has(queryKey)) {
+    if (!opts?.force && PERM_CACHE.has(queryKey)) {
       setPerms(PERM_CACHE.get(queryKey)!);
       return;
     }
@@ -233,13 +250,26 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
       setError(null);
       // Fetch permission tokens from wallet SDK
        const normalizedApp = app ? app.replace(/^https?:\/\//, '') : app;
-      const raw = await managers.permissionsManager.listProtocolPermissions({
+      const rawAll = await managers.permissionsManager.listProtocolPermissions({
         originator: normalizedApp,
         // privileged: false, // TODO: add support at the component level
         protocolName: protocol,
         protocolSecurityLevel: securityLevel,
         counterparty
       });
+
+      const now = Date.now()
+      for (const [k, ts] of recentlyRevokedRef.current.entries()) {
+        if (now - ts > REVOKE_TTL_MS) recentlyRevokedRef.current.delete(k)
+      }
+
+      const raw = rawAll.filter(t => {
+        const key = `${t.txid}.${t.outputIndex}`
+        const ts = recentlyRevokedRef.current.get(key)
+        return !ts || now - ts > REVOKE_TTL_MS
+      })
+
+      lastRawSignatureRef.current = signatureFromPermissions(raw)
 
       // Group & optionally limit results
       const grouped: PermissionGroup[] =
@@ -259,7 +289,59 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [app, protocol, securityLevel, counterparty, limit, itemsDisplayed]);
+  }, [app, protocol, securityLevel, counterparty, limit, itemsDisplayed, managers?.permissionsManager, onEmptyList, queryKey, signatureFromPermissions]);
+
+  const refreshPermsVerified = useCallback(async (o?: {
+    minAttempts?: number
+    requireChange?: boolean
+    expectedDifferentFrom?: string
+  }) => {
+    if (!managers?.permissionsManager) return
+
+    const minAttempts = typeof o?.minAttempts === 'number' ? Math.max(1, o.minAttempts) : 2
+    const requireChange = !!o?.requireChange
+    const expectedDifferentFrom = typeof o?.expectedDifferentFrom === 'string' ? o.expectedDifferentFrom : ''
+
+    const runId = ++verifyRefreshRunIdRef.current
+    const delays = [0, 150, 350, 750, 1500, 3000, 6000]
+    let prevSig: string | null = null
+    let sawChange = !requireChange
+
+    for (let attempt = 0; attempt < delays.length; attempt++) {
+      if (runId !== verifyRefreshRunIdRef.current) return
+      const delay = delays[attempt]
+      if (delay) await sleep(delay)
+
+      try {
+        PERM_CACHE.delete(queryKey)
+        await refreshPerms({ force: true })
+        if (runId !== verifyRefreshRunIdRef.current) return
+
+        const sig = lastRawSignatureRef.current
+        if (!sawChange && sig !== expectedDifferentFrom) {
+          sawChange = true
+        }
+
+        if (!sawChange) {
+          prevSig = sig
+          continue
+        }
+
+        if (attempt + 1 < minAttempts) {
+          prevSig = sig
+          continue
+        }
+
+        if (prevSig !== null && sig === prevSig) {
+          return
+        }
+        prevSig = sig
+      } catch (err) {
+        console.error('verified protocol refresh failed:', err)
+        return
+      }
+    }
+  }, [managers?.permissionsManager, queryKey, refreshPerms])
 
   /**
    * Optimistically update the UI by removing revoked permissions from the current state
@@ -356,6 +438,32 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
       // Optimistically update the UI by removing revoked permissions
       updateUIAfterRevoke(revokedPermissions);
 
+      try {
+        const revokedOutpoints: RevokedOutpoint[] = revokedPermissions.map(t => ({
+          txid: t.txid,
+          outputIndex: t.outputIndex,
+          counterparty: t.counterparty
+        }))
+
+        const originatorForEvent = (() => {
+          if (app) return app.replace(/^https?:\/\//, '')
+          if (revokedPermissions[0]?.originator) return revokedPermissions[0].originator
+          if ('permissions' in toRevoke && (toRevoke as any)?.originator) return (toRevoke as any).originator
+          const first = (revokedPermissions[0] as any)
+          return first?.originator
+        })()
+
+        window.dispatchEvent(new CustomEvent('protocol-permissions-changed', {
+          detail: {
+            op: ('permissions' in (toRevoke as any)) ? 'revoke-all' : 'revoke',
+            originator: originatorForEvent,
+            revoked: revokedOutpoints
+          }
+        }))
+      } catch {
+        // ignore
+      }
+
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
       toast.error(`Permission may not have been revoked: ${errorMessage}`);
@@ -373,6 +481,69 @@ const ProtocolPermissionList: React.FC<ProtocolPermissionListProps> = ({
   useEffect(() => {
     refreshPerms();
   }, [refreshPerms]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<any>).detail || {}
+
+      if (app) {
+        const norm = app.replace(/^https?:\/\//, '')
+        const detailOriginator = typeof detail.originator === 'string'
+          ? detail.originator.replace(/^https?:\/\//, '')
+          : undefined
+        if (detailOriginator && detailOriginator !== norm) return
+      }
+
+      const revoked: RevokedOutpoint[] = Array.isArray(detail.revoked) ? detail.revoked : []
+      if (revoked.length) {
+        const now = Date.now()
+        for (const r of revoked) {
+          if (!r?.txid || typeof r.outputIndex !== 'number') continue
+          recentlyRevokedRef.current.set(`${r.txid}.${r.outputIndex}`, now)
+        }
+
+        setPerms(prev => {
+          const next = prev
+            .map(group => {
+              if (isAppGroup(group) || isProtocolGroup(group)) {
+                const remaining = group.permissions.filter(p => !revoked.some(r => r?.txid === p.txid && r.outputIndex === p.outputIndex))
+                return { ...group, permissions: remaining } as PermissionGroup
+              }
+              return group
+            })
+            .filter(group => {
+              if (isAppGroup(group) || isProtocolGroup(group)) return group.permissions.length > 0
+              return true
+            })
+          return next
+        })
+
+        PERM_CACHE.delete(queryKey)
+      }
+
+      if (refreshDebounceRef.current) {
+        window.clearTimeout(refreshDebounceRef.current)
+      }
+
+      refreshDebounceRef.current = window.setTimeout(() => {
+        const op = typeof detail.op === 'string' ? detail.op : ''
+        const requireChange = op === 'grant' || op === 'revoke' || op === 'grant-group' || op === 'revoke-all'
+        const minAttempts = requireChange ? 2 : 1
+        const expectedDifferentFrom = requireChange ? lastRawSignatureRef.current : ''
+        void refreshPermsVerified({ minAttempts, requireChange, expectedDifferentFrom })
+      }, 150)
+    }
+
+    window.addEventListener('protocol-permissions-changed', handler as EventListener)
+    return () => {
+      window.removeEventListener('protocol-permissions-changed', handler as EventListener)
+      verifyRefreshRunIdRef.current += 1
+      if (refreshDebounceRef.current) {
+        window.clearTimeout(refreshDebounceRef.current)
+        refreshDebounceRef.current = null
+      }
+    }
+  }, [app, queryKey, refreshPermsVerified])
 
   /* ---------------------------- Early exit ---------------------------- */
   if (perms.length === 0 && !showEmptyList) return null;

@@ -6,6 +6,7 @@ import { WalletContext } from '../../WalletContext'
 import { UserContext } from '../../UserContext'
 import { InfoRow, PermissionHeader, RequestCard, Surface } from '../permissions/PermissionScaffold'
 import { getRegistryClient } from '../../utils/clientFactories'
+import CounterpartyChip from '../CounterpartyChip'
 type CertificateAccessRequest = {
   requestID: string
   certificateType?: string
@@ -120,7 +121,20 @@ const CertificateAccessHandler = () => {
             </Typography>
             <Stack spacing={1}>
               <InfoRow label="Certificate" value={certName || certificateType || 'Not specified'} />
-              {verifierPublicKey && <InfoRow label="Verifier" value={`${verifierPublicKey.substring(0, 12)}…`} muted />}
+              {verifierPublicKey && (
+                <InfoRow
+                  label="Verifier"
+                  value={(
+                    <CounterpartyChip
+                      counterparty={verifierPublicKey}
+                      clickable={false}
+                      layout="compact"
+                      size={1.0}
+                    />
+                  )}
+                  muted
+                />
+              )}
               <InfoRow label="App" value={originator || 'Unknown'} muted />
             </Stack>
           </Surface>

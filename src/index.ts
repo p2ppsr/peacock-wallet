@@ -13,6 +13,7 @@ export { default as BasketAccessList } from './components/BasketAccessList'
 export { default as CertificateAccessHandler } from './components/CertificateAccessHandler'
 export { default as CertificateAccessList } from './components/CertificateAccessList'
 export { default as GroupPermissionHandler } from './components/GroupPermissionHandler'
+export { default as CounterpartyPermissionHandler } from './components/CounterpartyPermissionHandler'
 export { default as RecoveryKeyHandler } from './components/RecoveryKeyHandler'
 export { default as SpendingAuthorizationHandler } from './components/SpendingAuthorizationHandler'
 export { default as SpendingAuthorizationList } from './components/SpendingAuthorizationList'
@@ -50,4 +51,4 @@ export { default as parseAppManifest } from './utils/parseAppManifest'
 export { default as isImageUrl } from './utils/isImageUrl'
 
 // Types
-export { type GroupPermissionRequest, type GroupedPermissions } from './types/GroupedPermissions'
+export { type GroupPermissionRequest, type GroupedPermissions, type CounterpartyPermissionRequest, type CounterpartyPermissions } from './types/GroupedPermissions'

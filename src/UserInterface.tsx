@@ -30,6 +30,7 @@ const queries = {
 // Import NativeHandlers from UserContext to avoid circular dependency
 import { NativeHandlers, UserContextProvider } from './UserContext'
 import GroupPermissionHandler from './components/GroupPermissionHandler'
+import CounterpartyPermissionHandler from './components/CounterpartyPermissionHandler'
 
 interface UserInterfaceProps {
   onWalletReady: (wallet: WalletInterface) => Promise<(() => void) | undefined>;
@@ -63,6 +64,7 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ onWalletReady, nativeHand
                 <SpendingAuthorizationHandler />
                 <ThemedToastContainer />
                 <GroupPermissionHandler />
+                <CounterpartyPermissionHandler />
                 <UpdateManager checkOnMount={true} interval={3600000} />
                 <Suspense fallback={<PageLoading />}>
                   <Routes>

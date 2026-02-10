@@ -21,7 +21,6 @@ import { Menu as MenuIcon } from '@mui/icons-material';
 import MyIdentity from './MyIdentity'; // Assuming index.tsx or similar
 import Trust from './Trust'; // Assuming index.tsx or similar
 import Apps from './Apps';
-import AppCatalog from './AppCatalog';
 import App from './App/Index'; // Assuming index.tsx or similar
 import Settings from './Settings'; // Assuming index.tsx or similar
 import { UserContext } from '../../UserContext';
@@ -258,8 +257,8 @@ export default function Dashboard() {
           <Route path='' element={<Navigate to='/dashboard/home' replace />} />
           <Route path='identity' element={<MyIdentity />} />
           <Route path='trust' element={<Trust />} />
-          <Route path='apps' element={<AppCatalog />} />
-          <Route path='app-catalog' element={<Navigate to='/dashboard/apps' replace />} />
+          <Route path='apps' element={<Navigate to='/dashboard/home' replace />} />
+          <Route path='app-catalog' element={<Navigate to='/dashboard/home' replace />} />
           <Route path='recent-apps' element={<Apps />} />
           <Route path='app/*' element={<App />} />
           <Route path='manage-app/:originator' element={<AppAccess />} />
