@@ -25,6 +25,66 @@ export const satoshisOptions = {
       name: 'GBP',
       locale: null,
       currency: 'GBP'
+    },
+    {
+      name: 'JPY',
+      locale: null,
+      currency: 'JPY'
+    },
+    {
+      name: 'CNY',
+      locale: null,
+      currency: 'CNY'
+    },
+    {
+      name: 'INR',
+      locale: null,
+      currency: 'INR'
+    },
+    {
+      name: 'AUD',
+      locale: null,
+      currency: 'AUD'
+    },
+    {
+      name: 'CAD',
+      locale: null,
+      currency: 'CAD'
+    },
+    {
+      name: 'CHF',
+      locale: null,
+      currency: 'CHF'
+    },
+    {
+      name: 'HKD',
+      locale: null,
+      currency: 'HKD'
+    },
+    {
+      name: 'SGD',
+      locale: null,
+      currency: 'SGD'
+    },
+    {
+      name: 'NZD',
+      locale: null,
+      currency: 'NZD'
+    },
+    {
+      name: 'SEK',
+      locale: null,
+      currency: 'SEK'
+    },
+    {
+      name: 'NOK',
+      locale: null,
+      currency: 'NOK'
+    },
+    {
+      name: 'MXN',
+      locale: null,
+      currency: 'MXN'
     }
   ],
   satsFormats: [
@@ -95,8 +155,7 @@ export const formatSatoshisAsFiat = (
   satoshisPerUSD: number | null = null,
   format: FiatFormatOption = null,
   settingsCurrency: string = 'SATS',
-  eurPerUSD = 0.93,
-  gbpPerUSD = 0.79,
+  fiatPerUSD: Record<string, number> = { USD: 1 },
   showFiatAsInteger = false
 ): string => {
   if (settingsCurrency) {
@@ -125,30 +184,19 @@ export const formatSatoshisAsFiat = (
     maxDigits = 0
   }
 
-  if (!format || format.currency === 'USD') {
-    const usdFormat = new Intl.NumberFormat(locale, { currency: 'USD', style: 'currency', minimumFractionDigits: minDigits, maximumFractionDigits: maxDigits })
-    return usdFormat.format(usd)
-    // return (Math.abs(usd) >= 1) ? usdFormat.format(usd) : `${(usd * 100).toFixed(3)} ¢`
-  } else if (format.currency === 'EUR') {
-    const eur = usd * eurPerUSD
-    if (isNaN(eur)) return '...'
-    const eurFormat = new Intl.NumberFormat(locale, { currency: 'EUR', style: 'currency', minimumFractionDigits: minDigits })
-    return eurFormat.format(eur)
-  } else if (format.currency === 'GBP') {
-    const gbp = usd * gbpPerUSD
-    if (isNaN(gbp)) return '...'
-    const gbpFormat = new Intl.NumberFormat(locale, { currency: 'GBP', style: 'currency', minimumFractionDigits: minDigits })
-    return gbpFormat.format(gbp)
-  }
-
-  const fallbackCurrency = format.currency ?? 'USD'
-  const fallbackFormat = new Intl.NumberFormat(locale, {
-    currency: fallbackCurrency,
+  const requested = (settingsCurrency || '').toUpperCase()
+  const formatCurrency = (format?.currency || 'USD').toUpperCase()
+  const targetCurrency = typeof fiatPerUSD[requested] === 'number' || requested === 'USD' ? requested : formatCurrency
+  const rate = targetCurrency === 'USD' ? 1 : fiatPerUSD[targetCurrency]
+  const value = typeof rate === 'number' ? usd * rate : usd
+  if (isNaN(value)) return '...'
+  const fmt = new Intl.NumberFormat(locale, {
+    currency: targetCurrency,
     style: 'currency',
     minimumFractionDigits: minDigits,
-    maximumFractionDigits: maxDigits,
+    maximumFractionDigits: maxDigits
   })
-  return fallbackFormat.format(usd)
+  return fmt.format(value)
 }
 export const formatSatoshis = (
   satoshis: number | string,

@@ -1,5 +1,13 @@
 import React, { useState, useEffect, createContext, useMemo, useCallback, useContext, useRef } from 'react'
 import {
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+} from '@mui/material'
+import {
   Wallet,
   WalletPermissionsManager,
   PrivilegedKeyManager,
@@ -23,6 +31,7 @@ import type { PermissionsManagerConfig } from '@bsv/wallet-toolbox-client'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { DEFAULT_STORAGE_URL, DEFAULT_CHAIN, ADMIN_ORIGINATOR } from './config'
+import { deriveDefaultFiatCurrencyFromNavigator, getCurrencyDisplayName } from './utils/currency'
 import { UserContext } from './UserContext'
 import { CounterpartyPermissionRequest, GroupPermissionRequest, GroupedPermissions } from './types/GroupedPermissions'
 import { updateRecentApp } from './pages/Dashboard/Apps/getApps'
@@ -229,9 +238,13 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 }) => {
   const [managers, setManagers] = useState<ManagerState>({});
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
   const adminOriginator = ADMIN_ORIGINATOR;
   const recentApps: any[] = []
   const [activeProfile, setActiveProfile] = useState<WalletProfile | null>(null)
+
+  const [regionCurrencyPromptOpen, setRegionCurrencyPromptOpen] = useState(false)
+  const [regionCurrencyPromptSuggested, setRegionCurrencyPromptSuggested] = useState<string>('USD')
 
   const { isFocused, onFocusRequested, onFocusRelinquished, setBasketAccessModalOpen, setCertificateAccessModalOpen, setProtocolAccessModalOpen, setSpendingAuthorizationModalOpen, setGroupPermissionModalOpen, setCounterpartyPermissionModalOpen } = useContext(UserContext);
 
@@ -1146,22 +1159,164 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   // When Settings manager becomes available, populate the user's settings
   useEffect(() => {
     const loadSettings = async () => {
+      setSettingsLoaded(false)
       if (managers.settingsManager) {
         try {
           const userSettings = await managers.settingsManager.get();
           setSettings(userSettings);
         } catch (e) {
           // Unable to load settings, defaults are already loaded.
+        } finally {
+          setSettingsLoaded(true)
         }
+      } else {
+        setSettingsLoaded(false)
       }
     };
 
     loadSettings();
   }, [managers]);
 
+  useEffect(() => {
+    const wallet = managers?.walletManager as any
+    if (!wallet?.authenticated) return
+    if (!managers.settingsManager) return
+    if (!activeProfile?.id) return
+    if (!settingsLoaded) return
+    if (typeof localStorage === 'undefined') return
+
+    const profileId = Array.isArray((activeProfile as any).id)
+      ? (activeProfile as any).id.join(',')
+      : String((activeProfile as any).id)
+    const firstLoginKey = `uw_first_login_done_v1:${profileId}`
+
+    try {
+      if (localStorage.getItem(firstLoginKey)) return
+    } catch {
+      return
+    }
+
+    const current = (settings?.currency || '').toString().toUpperCase()
+    const shouldAutoSet = !current
+
+    if (shouldAutoSet) {
+      try {
+        const derived = deriveDefaultFiatCurrencyFromNavigator().toString().toUpperCase()
+        if (derived && derived !== current) {
+          const nextSettings = {
+            ...settings,
+            currency: derived
+          }
+          void managers.settingsManager.set(nextSettings as any).then(() => {
+            setSettings(nextSettings as any)
+          })
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    try {
+      localStorage.setItem(firstLoginKey, '1')
+    } catch {
+      // ignore
+    }
+  }, [activeProfile?.id, managers?.walletManager, managers.settingsManager, settings, settingsLoaded])
+
+  useEffect(() => {
+    const wallet = managers?.walletManager as any
+    if (!wallet?.authenticated) return
+    if (!activeProfile?.id) return
+    if (typeof localStorage === 'undefined') return
+    if (regionCurrencyPromptOpen) return
+
+    const current = (settings?.currency || '').toString().toUpperCase()
+    if (current !== 'BSV' && current !== 'SATS') return
+
+    const profileId = Array.isArray((activeProfile as any).id)
+      ? (activeProfile as any).id.join(',')
+      : String((activeProfile as any).id)
+
+    const storageKey = `uw_region_currency_prompted_v1:${profileId}`
+    try {
+      if (localStorage.getItem(storageKey)) return
+    } catch {
+      return
+    }
+
+    const suggested = deriveDefaultFiatCurrencyFromNavigator()
+    const suggestedUpper = suggested.toString().toUpperCase()
+    if (!suggestedUpper) return
+    if (suggestedUpper === current) {
+      try {
+        localStorage.setItem(storageKey, '1')
+      } catch {
+        // ignore
+      }
+      return
+    }
+
+    setRegionCurrencyPromptSuggested(suggestedUpper)
+    setRegionCurrencyPromptOpen(true)
+  }, [activeProfile?.id, managers?.walletManager, regionCurrencyPromptOpen, settings?.currency])
+
+  const markRegionCurrencyPrompted = useCallback(() => {
+    if (!activeProfile?.id) return
+    const profileId = Array.isArray((activeProfile as any).id)
+      ? (activeProfile as any).id.join(',')
+      : String((activeProfile as any).id)
+    const storageKey = `uw_region_currency_prompted_v1:${profileId}`
+    try {
+      localStorage.setItem(storageKey, '1')
+    } catch {
+      // ignore
+    }
+  }, [activeProfile?.id])
+
+  const denyRegionCurrencySwitch = useCallback(() => {
+    markRegionCurrencyPrompted()
+    setRegionCurrencyPromptOpen(false)
+  }, [markRegionCurrencyPrompted])
+
+  const acceptRegionCurrencySwitch = useCallback(async () => {
+    try {
+      await updateSettings({
+        ...settings,
+        currency: regionCurrencyPromptSuggested
+      })
+    } catch {
+      // ignore
+    } finally {
+      markRegionCurrencyPrompted()
+      setRegionCurrencyPromptOpen(false)
+    }
+  }, [markRegionCurrencyPrompted, regionCurrencyPromptSuggested, settings, updateSettings])
+
   const logout = useCallback(() => {
+    const preserved: Record<string, string> = {}
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (!key) continue
+        if (key.startsWith('uw_region_currency_prompted_v1:') || key.startsWith('uw_first_login_done_v1:')) {
+          const value = localStorage.getItem(key)
+          if (value != null) preserved[key] = value
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     // Clear localStorage to prevent auto-login
     localStorage.clear();
+
+    try {
+      for (const [key, value] of Object.entries(preserved)) {
+        localStorage.setItem(key, value)
+      }
+    } catch {
+      // ignore
+    }
     if (localStorage.snap) {
       localStorage.removeItem('snap');
     }
@@ -1170,6 +1325,9 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
     // Reset manager state
     setManagers({});
+
+    setSettings(DEFAULT_SETTINGS)
+    setSettingsLoaded(false)
 
     setSnapshotLoaded(false);
   }, []);
@@ -1470,6 +1628,37 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   return (
     <WalletContext.Provider value={contextValue}>
       {children}
+      <Dialog
+        open={regionCurrencyPromptOpen}
+        onClose={denyRegionCurrencySwitch}
+        fullWidth
+        maxWidth='xs'
+      >
+        <DialogTitle color='textPrimary'>Switch to your local currency?</DialogTitle>
+        <DialogContent>
+          <DialogContentText color='textSecondary'>
+            You’re currently displaying amounts in{' '}
+            {((settings?.currency || '').toString().toUpperCase() === 'SATS' ? 'Sats' : 'BSV')}. Would you like to
+            switch to{' '}
+            {getCurrencyDisplayName(
+              regionCurrencyPromptSuggested,
+              (typeof navigator !== 'undefined' && (navigator.languages?.[0] || navigator.language)) || undefined
+            )}{' '}
+            ({regionCurrencyPromptSuggested}) based on your region?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={denyRegionCurrencySwitch}>Cancel</Button>
+          <Button
+            color='error'
+            onClick={() => {
+              void acceptRegionCurrencySwitch()
+            }}
+          >
+            Switch
+          </Button>
+        </DialogActions>
+      </Dialog>
     </WalletContext.Provider>
   )
 }

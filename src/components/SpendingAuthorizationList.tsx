@@ -11,6 +11,7 @@ import { WalletContext } from '../WalletContext';
 import { PermissionToken } from '@bsv/wallet-toolbox-client';
 // NOTE: rely on the same exchange-rate provider used by AmountDisplay
 import { ExchangeRateContext } from './AmountDisplay/ExchangeRateContextProvider';
+import { isSupportedFiatCurrency } from '../utils/currency'
 import AppLogo from './AppLogo';
 
 type Props = {
@@ -30,7 +31,7 @@ export const SpendingAuthorizationList: FC<Props> = ({
   onEmptyList = () => { },
 }) => {
   const { managers, spendingRequests, settings, activeProfile } = useContext(WalletContext);
-  const rates = useContext<any>(ExchangeRateContext); // { satoshisPerUSD, eurPerUSD, gbpPerUSD, ... }
+  const rates = useContext<any>(ExchangeRateContext); // { satoshisPerUSD, fiatPerUSD, ... }
 
   // --------------------------------------------------------------------------
   //   STATE
@@ -57,15 +58,14 @@ export const SpendingAuthorizationList: FC<Props> = ({
   type Unit =
     | { kind: 'sats' }
     | { kind: 'bsv' }
-    | { kind: 'fiat'; code: 'USD' | 'EUR' | 'GBP' };
+    | { kind: 'fiat'; code: string };
 
   const unit: Unit = (() => {
     if (/SAT/i.test(rawCurrency)) return { kind: 'sats' };
     if (rawCurrency === 'BSV' || /BITCOIN/i.test(rawCurrency)) return { kind: 'bsv' };
-    if (rawCurrency === 'USD' || rawCurrency === 'EUR' || rawCurrency === 'GBP') {
+    if (isSupportedFiatCurrency(rawCurrency)) {
       return { kind: 'fiat', code: rawCurrency };
     }
-    // anything else -> sats (matches AmountDisplay behavior)
     return { kind: 'sats' };
   })();
 
@@ -90,14 +90,9 @@ export const SpendingAuthorizationList: FC<Props> = ({
   // --------------------------------------------------------------------------
   //   CONVERSIONS (use same rate model as AmountDisplay)
   // --------------------------------------------------------------------------
-  const { satoshisPerUSD, eurPerUSD, gbpPerUSD } = rates || {};
+  const { satoshisPerUSD, fiatPerUSD } = rates || {};
 
-  const fiatRatesReady =
-    unit.kind !== 'fiat' ? true
-    : unit.code === 'USD' ? !!satoshisPerUSD
-    : unit.code === 'EUR' ? (!!satoshisPerUSD && !!eurPerUSD)
-    : unit.code === 'GBP' ? (!!satoshisPerUSD && !!gbpPerUSD)
-    : false;
+  const fiatRatesReady = unit.kind !== 'fiat' ? true : !!satoshisPerUSD && typeof fiatPerUSD?.[unit.code] === 'number';
 
   // sats -> input units
   const satsToInput = useCallback((sats: number) => {
@@ -106,18 +101,11 @@ export const SpendingAuthorizationList: FC<Props> = ({
 
     // fiat
     if (!satoshisPerUSD) return NaN;
-    const usd = sats / satoshisPerUSD; // USD = sats / (sats per USD)
-    if (unit.code === 'USD') return usd;
-    if (unit.code === 'EUR') {
-      if (!eurPerUSD) return NaN;
-      return usd * eurPerUSD; // EUR = USD * (EUR per USD)
-    }
-    if (unit.code === 'GBP') {
-      if (!gbpPerUSD) return NaN;
-      return usd * gbpPerUSD; // GBP = USD * (GBP per USD)
-    }
-    return NaN;
-  }, [unit, satoshisPerUSD, eurPerUSD, gbpPerUSD]);
+    const usd = sats / satoshisPerUSD;
+    const r = unit.code === 'USD' ? 1 : fiatPerUSD?.[unit.code];
+    if (typeof r !== 'number') return NaN;
+    return usd * r;
+  }, [unit, satoshisPerUSD, fiatPerUSD]);
 
   // input units -> sats
   const inputToSats = useCallback((amount: number) => {
@@ -126,16 +114,11 @@ export const SpendingAuthorizationList: FC<Props> = ({
 
     // fiat
     if (!satoshisPerUSD) return NaN;
-    let usd = amount;
-    if (unit.code === 'EUR') {
-      if (!eurPerUSD) return NaN;
-      usd = amount / eurPerUSD; // USD = EUR / (EUR per USD)
-    } else if (unit.code === 'GBP') {
-      if (!gbpPerUSD) return NaN;
-      usd = amount / gbpPerUSD; // USD = GBP / (GBP per USD)
-    }
-    return Math.round(usd * satoshisPerUSD); // sats = USD * (sats per USD)
-  }, [unit, satoshisPerUSD, eurPerUSD, gbpPerUSD]);
+    const r = unit.code === 'USD' ? 1 : fiatPerUSD?.[unit.code];
+    if (typeof r !== 'number' || r === 0) return NaN;
+    const usd = amount / r;
+    return Math.round(usd * satoshisPerUSD);
+  }, [unit, satoshisPerUSD, fiatPerUSD]);
 
   // --------------------------------------------------------------------------
   //   MISC

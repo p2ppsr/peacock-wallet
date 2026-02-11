@@ -42,7 +42,7 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
   const ctx = useContext<any>(ExchangeRateContext)
   const {
     // Exchange rate context...
-    satoshisPerUSD, eurPerUSD, gbpPerUSD,
+    satoshisPerUSD, fiatPerUSD,
     // Shared display format context...
     isFiatPreferred, fiatFormatIndex, satsFormatIndex,
     // display format update methods...
@@ -56,21 +56,21 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
   const [color, setColor] = useState('textPrimary')
 
   // --- helper: compute numeric fiat value for USD/EUR/GBP
-  const computeFiatNumeric = (sats: number, code: 'USD' | 'EUR' | 'GBP'): number | null => {
+  const computeFiatNumeric = (sats: number, code: string): number | null => {
     if (!satoshisPerUSD) return null
     const usd = sats / satoshisPerUSD // USD = sats / (sats per USD)
-    if (code === 'USD') return usd
-    if (code === 'EUR') return eurPerUSD ? usd * eurPerUSD : null
-    if (code === 'GBP') return gbpPerUSD ? usd * gbpPerUSD : null
-    return null
+    const c = code.toUpperCase()
+    if (c === 'USD') return usd
+    const r = fiatPerUSD?.[c]
+    return typeof r === 'number' ? usd * r : null
   }
 
   // --- helper: smart-format small fiat numbers with 3 significant digits
-  const formatSmallFiat = (value: number, code: 'USD' | 'EUR' | 'GBP'): string => {
+  const formatSmallFiat = (value: number, code: string): string => {
     // Use currency style but cap to 3 significant digits; no grouping to keep it compact
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
-      currency: code,
+      currency: code.toUpperCase(),
       minimumSignificantDigits: 3,
       maximumSignificantDigits: 3,
       useGrouping: false
@@ -111,14 +111,16 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
     if (!isNaN(satoshis) && satoshisPerUSD) {
       // Keep your existing formatted output first
       const newFormattedFiat = formatSatoshisAsFiat(
-        satoshis, satoshisPerUSD, fiatFormat, settingsCurrency, eurPerUSD, gbpPerUSD, showFiatAsInteger
+        satoshis,
+        satoshisPerUSD,
+        fiatFormat,
+        settingsCurrency,
+        fiatPerUSD,
+        showFiatAsInteger
       ) || '...'
 
       // Determine which currency code is in play for numeric calculation
-      const code: 'USD' | 'EUR' | 'GBP' =
-        (settingsCurrency === 'EUR' ? 'EUR'
-        : settingsCurrency === 'GBP' ? 'GBP'
-        : 'USD') // default USD when settingsCurrency is empty or USD/other
+      const code = settingsCurrency || 'USD'
 
       const fiatNumeric = computeFiatNumeric(satoshis, code)
 
@@ -131,7 +133,7 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
     } else {
       setFormattedFiatAmount('...')
     }
-  }, [satoshis, satoshisPerUSD, fiatFormat, settingsCurrency, eurPerUSD, gbpPerUSD, showFiatAsInteger]) 
+  }, [satoshis, satoshisPerUSD, fiatFormat, settingsCurrency, fiatPerUSD, showFiatAsInteger]) 
 
   // Create handlers for clicks with proper accessibility
   const handleFiatClick = () => {
@@ -169,7 +171,8 @@ const AmountDisplay: React.FC<Props> = ({ abbreviate, showPlus, description, chi
 
   // Updated component return with direct event handling
   if (settingsCurrency) {
-    return ['USD', 'EUR', 'GBP'].indexOf(settingsCurrency) > -1
+    const isSelectedFiat = settingsCurrency === 'USD' || typeof fiatPerUSD?.[settingsCurrency] === 'number'
+    return isSelectedFiat
       ? (
         <Tooltip disableInteractive title={<Typography color='inherit'>{formattedSatoshis}</Typography>} arrow>
           <span style={{ color }}>{formattedFiatAmount}</span>

@@ -25,7 +25,7 @@ import { useNavigate } from 'react-router-dom'
 import { reconcileStoredKeyMaterial } from '../../../utils/keyMaterial'
 
 const Settings: React.FC = () => {
-  const { settings, updateSettings, logout } = useContext(WalletContext)
+  const { settings, updateSettings } = useContext(WalletContext)
   const { pageLoaded } = useContext(UserContext)
   const theme = useTheme()
   const navigate = useNavigate()
@@ -36,18 +36,8 @@ const Settings: React.FC = () => {
   const [warningOpen, setWarningOpen] = useState(false)
   const [revealType, setRevealType] = useState<'mnemonic' | 'hex' | 'both' | null>(null)
   const [showSecrets, setShowSecrets] = useState(false)
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
-
-  const currencies = useMemo(() => ({
-    BSV: '0.033',
-    SATS: '3,333,333',
-    USD: '$10',
-    EUR: '€9.15',
-    GBP: '£7.86'
-  }), [])
 
   const [selectedTheme, setSelectedTheme] = useState<string>(settings?.theme?.mode || 'system')
-  const [selectedCurrency, setSelectedCurrency] = useState<string>(settings?.currency || 'BSV')
   const phraseWordCount = useMemo(
     () => (savedMnemonic.trim() ? savedMnemonic.trim().split(/\s+/).length : 0),
     [savedMnemonic]
@@ -56,9 +46,6 @@ const Settings: React.FC = () => {
   useEffect(() => {
     if (settings?.theme?.mode) {
       setSelectedTheme(settings.theme.mode)
-    }
-    if (settings?.currency) {
-      setSelectedCurrency(settings.currency)
     }
   }, [settings])
 
@@ -92,27 +79,6 @@ const Settings: React.FC = () => {
     } catch (e) {
       toast.error(e.message)
       setSelectedTheme(settings?.theme?.mode || 'system')
-    } finally {
-      setSettingsLoading(false)
-    }
-  }
-
-  const handleCurrencyChange = async (currency: string) => {
-    if (selectedCurrency === currency) return
-
-    try {
-      setSettingsLoading(true)
-      setSelectedCurrency(currency)
-
-      await updateSettings({
-        ...settings,
-        currency
-      })
-
-      toast.success('Currency updated!')
-    } catch (e) {
-      toast.error(e.message)
-      setSelectedCurrency(settings?.currency || 'BSV')
     } finally {
       setSettingsLoading(false)
     }
@@ -223,53 +189,20 @@ const Settings: React.FC = () => {
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4 }}>
         <Typography variant="h4" sx={{ mb: 2 }}>
-          Default Currency
+          Advanced Settings
         </Typography>
         <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
-          How would you like to see your account balance?
+          Manage session settings and your default currency.
         </Typography>
-
-        <Grid2
-          container
-          spacing={2}
-          justifyContent="center"
-          sx={{ overflowX: 'auto' }}
+        <Button
+          variant="outlined"
+          disabled={settingsLoading}
+          onClick={() => navigate('/dashboard/settings/advanced')}
+          sx={{ textTransform: 'none' }}
         >
-          {Object.entries(currencies).map(([currency, sample]) => {
-            const isSelected = selectedCurrency === currency
-            return (
-              <Grid2 key={currency}>
-                <Button
-                  variant="outlined"
-                  disabled={settingsLoading}
-                  onClick={() => handleCurrencyChange(currency)}
-                  sx={{
-                    width: 110,
-                    height: 88,
-                    m: 1,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'all 0.2s ease-in-out',
-                    borderRadius: 2,
-                    ...(isSelected && getSelectedButtonStyle(true)),
-                    bgcolor: isSelected ? 'action.selected' : 'transparent'
-                  }}
-                >
-                  <Typography variant="body1" fontWeight="bold">
-                    {currency}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {sample}
-                  </Typography>
-                </Button>
-              </Grid2>
-            )
-          })}
-        </Grid2>
+          Open Advanced Settings
+        </Button>
       </Paper>
-
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper' }}>
         <Typography variant="h4" sx={{ mb: 2 }}>
@@ -363,23 +296,6 @@ const Settings: React.FC = () => {
         )}
       </Paper>
 
-      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 4 }}>
-        <Typography variant="h4" sx={{ mb: 2 }}>
-          Session
-        </Typography>
-        <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
-          Sign out of this wallet on this device.
-        </Typography>
-        <Button
-          variant="outlined"
-          color="error"
-          onClick={() => setLogoutConfirmOpen(true)}
-          sx={{ textTransform: 'none' }}
-        >
-          Log out
-        </Button>
-      </Paper>
-
       <Dialog
         open={warningOpen}
         onClose={handleCloseWarning}
@@ -461,37 +377,6 @@ const Settings: React.FC = () => {
               Reveal now
             </Button>
           )}
-        </DialogActions>
-      </Dialog>
-
-      <Dialog
-        open={logoutConfirmOpen}
-        onClose={() => setLogoutConfirmOpen(false)}
-        fullWidth
-        maxWidth="xs"
-      >
-        <DialogTitle>Sign out?</DialogTitle>
-        <DialogContent dividers>
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Make sure you have saved your recovery phrase or hex key before logging out.
-          </Alert>
-          <Typography variant="body1">
-            Logging out will lock this wallet on this device until you re-enter your key material.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setLogoutConfirmOpen(false)}>Cancel</Button>
-          <Button
-            color="error"
-            variant="contained"
-            onClick={() => {
-              setLogoutConfirmOpen(false)
-              logout()
-              navigate('/')
-            }}
-          >
-            Log out
-          </Button>
         </DialogActions>
       </Dialog>
     </Box>

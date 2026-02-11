@@ -27,6 +27,7 @@ import CounterpartyChip from '../CounterpartyChip'
 import AmountDisplay from '../AmountDisplay'
 import { ExchangeRateContext } from '../AmountDisplay/ExchangeRateContextProvider'
 import type { GroupedPermissions } from '@bsv/wallet-toolbox-client'
+import { isSupportedFiatCurrency } from '../../utils/currency'
 
 // Local type definitions for group permissions
 type ProtocolPermission = {
@@ -68,7 +69,7 @@ const GroupPermissionHandler = () => {
   } = useContext<UserContextValue>(UserContext)
 
   const rates = useContext<any>(ExchangeRateContext)
-  const { satoshisPerUSD, eurPerUSD, gbpPerUSD } = rates || {}
+  const { satoshisPerUSD, fiatPerUSD } = rates || {}
 
   const rawCurrency: string = String(
     (settings as any)?.currency ??
@@ -80,22 +81,19 @@ const GroupPermissionHandler = () => {
   type Unit =
     | { kind: 'sats' }
     | { kind: 'bsv' }
-    | { kind: 'fiat'; code: 'USD' | 'EUR' | 'GBP' }
+    | { kind: 'fiat'; code: string }
 
   const unit: Unit = useMemo(() => {
     if (/SAT/i.test(rawCurrency)) return { kind: 'sats' }
     if (rawCurrency === 'BSV' || /BITCOIN/i.test(rawCurrency)) return { kind: 'bsv' }
-    if (rawCurrency === 'USD' || rawCurrency === 'EUR' || rawCurrency === 'GBP') return { kind: 'fiat', code: rawCurrency }
+    if (isSupportedFiatCurrency(rawCurrency)) return { kind: 'fiat', code: rawCurrency }
     return { kind: 'sats' }
   }, [rawCurrency])
 
   const fiatRatesReady = useMemo(() => {
     if (unit.kind !== 'fiat') return true
-    if (unit.code === 'USD') return !!satoshisPerUSD
-    if (unit.code === 'EUR') return !!satoshisPerUSD && !!eurPerUSD
-    if (unit.code === 'GBP') return !!satoshisPerUSD && !!gbpPerUSD
-    return false
-  }, [unit, satoshisPerUSD, eurPerUSD, gbpPerUSD])
+    return !!satoshisPerUSD && typeof fiatPerUSD?.[unit.code] === 'number'
+  }, [unit, satoshisPerUSD, fiatPerUSD])
 
   const [originator, setOriginator] = useState('')
   const [requestID, setRequestID] = useState<string | null>(null)
@@ -166,7 +164,7 @@ const GroupPermissionHandler = () => {
     if (!fiatRatesReady && unit.kind === 'fiat') return 'sats'
     if (unit.kind === 'sats') return 'sats'
     if (unit.kind === 'bsv') return 'BSV'
-    return unit.code === 'USD' ? '$' : unit.code === 'EUR' ? '€' : '£'
+    return unit.code === 'USD' ? '$' : unit.code === 'EUR' ? '€' : unit.code === 'GBP' ? '£' : unit.code
   }, [unit, fiatRatesReady])
 
   const satsToInput = useCallback((sats: number) => {
@@ -176,11 +174,10 @@ const GroupPermissionHandler = () => {
 
     if (!satoshisPerUSD) return NaN
     const usd = sats / satoshisPerUSD
-    if (unit.code === 'USD') return usd
-    if (unit.code === 'EUR') return eurPerUSD ? usd * eurPerUSD : NaN
-    if (unit.code === 'GBP') return gbpPerUSD ? usd * gbpPerUSD : NaN
-    return NaN
-  }, [unit, fiatRatesReady, satoshisPerUSD, eurPerUSD, gbpPerUSD])
+    const r = unit.code === 'USD' ? 1 : fiatPerUSD?.[unit.code]
+    if (typeof r !== 'number') return NaN
+    return usd * r
+  }, [unit, fiatRatesReady, satoshisPerUSD, fiatPerUSD])
 
   const inputToSats = useCallback((amount: number) => {
     if (!fiatRatesReady && unit.kind === 'fiat') return Math.round(amount)
@@ -188,16 +185,11 @@ const GroupPermissionHandler = () => {
     if (unit.kind === 'bsv') return Math.round(amount * 1e8)
 
     if (!satoshisPerUSD) return NaN
-    let usd = amount
-    if (unit.code === 'EUR') {
-      if (!eurPerUSD) return NaN
-      usd = amount / eurPerUSD
-    } else if (unit.code === 'GBP') {
-      if (!gbpPerUSD) return NaN
-      usd = amount / gbpPerUSD
-    }
+    const r = unit.code === 'USD' ? 1 : fiatPerUSD?.[unit.code]
+    if (typeof r !== 'number' || r === 0) return NaN
+    const usd = amount / r
     return Math.round(usd * satoshisPerUSD)
-  }, [unit, fiatRatesReady, satoshisPerUSD, eurPerUSD, gbpPerUSD])
+  }, [unit, fiatRatesReady, satoshisPerUSD, fiatPerUSD])
 
   const formatInputFromSats = useCallback((sats: number) => {
     const trimZeros = (s: string) => s.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')

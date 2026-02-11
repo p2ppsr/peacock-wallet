@@ -1,5 +1,7 @@
-import { ReactNode, createContext, useEffect, useState } from 'react'
+import { ReactNode, createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { Services } from '@bsv/wallet-toolbox-client'
+import { WalletContext } from '../../WalletContext'
+import { isSupportedFiatCurrency } from '../../utils/currency'
 
 const services = new Services('main')
 
@@ -9,6 +11,8 @@ type ExchangeRateState = {
   satoshisPerUSD: number
   eurPerUSD: number
   gbpPerUSD: number
+  fiatPerUSD: Record<string, number>
+  selectedFiatCurrency: string
   whenUpdated: Date | null
   isFiatPreferred: boolean
   fiatFormatIndex: number
@@ -25,6 +29,8 @@ const defaultState: ExchangeRateState = {
   satoshisPerUSD: NaN,
   eurPerUSD: 0.93, // TODO: must tie to external service
   gbpPerUSD: 0.79, // TODO: must tie to external service
+  fiatPerUSD: { USD: 1, EUR: 0.93, GBP: 0.79 },
+  selectedFiatCurrency: 'USD',
   whenUpdated: null,
   isFiatPreferred: false,
   fiatFormatIndex: 0,
@@ -45,6 +51,8 @@ export const ExchangeRateContextProvider: React.FC<{
   children: ReactNode
 }> = ({ children }) => {
   const [state, setState] = useState<ExchangeRateState>(defaultState)
+  const { settings } = useContext(WalletContext)
+  const settingsCurrency = useMemo(() => (settings?.currency || '').toString().toUpperCase(), [settings?.currency])
 
   // The function instances are created here and included in the state to ensure they have stable references
   const contextValue: ExchangeRateContextValue = {
@@ -64,14 +72,32 @@ export const ExchangeRateContextProvider: React.FC<{
     const tick = async () => {
       try {
         const usdPerBsv = await services.getBsvExchangeRate()
-        const gbpPerUSD = await services.getFiatExchangeRate('GBP')
-        const eurPerUSD = await services.getFiatExchangeRate('EUR')
+        const selectedFiat = isSupportedFiatCurrency(settingsCurrency) ? settingsCurrency : 'USD'
+
+        const fiatToFetch = Array.from(new Set(['EUR', 'GBP', selectedFiat].filter(Boolean)))
+        const bulk = (services as any).getFiatExchangeRates
+
+        let fiatPerUSD: Record<string, number> = { USD: 1 }
+        if (typeof bulk === 'function') {
+          const r = await bulk.call(services, fiatToFetch)
+          fiatPerUSD = { ...fiatPerUSD, ...(r?.rates || {}) }
+        } else {
+          const pairs = await Promise.all(
+            fiatToFetch.map(async c => [c, await (services as any).getFiatExchangeRate(c)] as const)
+          )
+          for (const [c, v] of pairs) fiatPerUSD[c] = v
+        }
+
+        const gbpPerUSD = typeof fiatPerUSD.GBP === 'number' ? fiatPerUSD.GBP : NaN
+        const eurPerUSD = typeof fiatPerUSD.EUR === 'number' ? fiatPerUSD.EUR : NaN
         const satoshisPerUSD = 100000000 / usdPerBsv // satsPerBsv * bsvPerUSD => satsPerUSD
         setState(oldState => ({
           ...oldState,
           satoshisPerUSD,
           gbpPerUSD,
           eurPerUSD,
+          fiatPerUSD,
+          selectedFiatCurrency: selectedFiat,
           whenUpdated: new Date()
         }))
       } catch (error) {
@@ -87,7 +113,7 @@ export const ExchangeRateContextProvider: React.FC<{
 
     // This is the cleanup function to clear the interval when the component unmounts
     return () => clearInterval(timerID)
-  }, []) // Empty dependency array means this useEffect runs once when the component mounts
+  }, [settingsCurrency]) // re-evaluate when currency preference changes
 
   return (
     <ExchangeRateContext.Provider value={contextValue}>

@@ -33,6 +33,7 @@ import BasketAccess from './BasketAccess'; // Assuming index.jsx or similar
 import ProtocolAccess from './ProtocolAccess'; // Assuming index.jsx or similar
 import CounterpartyAccess from './CounterpartyAccess'; // Assuming index.jsx or similar
 import CertificateAccess from './CertificateAccess'; // Assuming index.jsx or similar
+import AdvancedSettings from './Settings/Advanced'
 import { WalletContext } from '../../WalletContext';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { toast } from 'react-toastify';
@@ -251,6 +252,7 @@ export default function Dashboard() {
           />
 
           <Route path='settings' element={<Settings />} />
+          <Route path='settings/advanced' element={<AdvancedSettings />} />
           <Route path='transfer' element={<Navigate to='/dashboard/payments' replace />} />
           <Route path='payments' element={<Transfer />} />
           <Route path='home' element={<Home />} />
