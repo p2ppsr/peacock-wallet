@@ -24,8 +24,7 @@ import HistoryRoundedIcon from '@mui/icons-material/HistoryRounded'
 import { openUrl } from '../../utils/openUrl'
 import CustomDialog from '../../components/CustomDialog'
 import { WalletContext } from '../../WalletContext'
-import { ExchangeRateContext } from '../../components/AmountDisplay/ExchangeRateContextProvider'
-import { showSatoshiShopFundingModal, showSatoshiShopPendingTransactionsModal } from '../Shop/shopModal'
+import { showRampBuyModal, showRampSellModal } from '../Shop/shopModal'
 
 // --- Animations ---
 const hoverLift = {
@@ -58,7 +57,6 @@ export default function Home() {
   const theme = useTheme()
 
   const { managers } = useContext(WalletContext)
-  const rates = useContext<any>(ExchangeRateContext)
   const [buySellOpen, setBuySellOpen] = useState(false)
   const [isFunding, setIsFunding] = useState(false)
 
@@ -125,40 +123,28 @@ export default function Home() {
       return
     }
 
+    setBuySellOpen(false)
     try {
       setIsFunding(true)
-      await showSatoshiShopFundingModal(wallet, 0, {
-        title: 'Buy BSV Satoshis',
-        introText: 'Use your card to top up your BSV wallet.',
-        postPurchaseText: 'Once your sats arrive, you can spend them from your wallet.',
-        cancelText: 'Close',
-        marketSatoshisPerUSD: rates?.satoshisPerUSD
-      })
+      await showRampBuyModal(wallet)
     } finally {
       setIsFunding(false)
-      setBuySellOpen(false)
     }
   }
 
-  const handlePendingTransactions = async () => {
+  const handleSell = async () => {
     const wallet = walletClientForFunding
     if (!wallet) {
       setBuySellOpen(false)
       return
     }
 
+    setBuySellOpen(false)
     try {
       setIsFunding(true)
-      await showSatoshiShopPendingTransactionsModal(wallet, {
-        title: 'Buy BSV Satoshis',
-        introText: 'Use your card to top up your BSV wallet.',
-        postPurchaseText: 'Once your sats arrive, you can spend them from your wallet.',
-        cancelText: 'Close',
-        marketSatoshisPerUSD: rates?.satoshisPerUSD
-      })
+      await showRampSellModal(wallet)
     } finally {
       setIsFunding(false)
-      setBuySellOpen(false)
     }
   }
 
@@ -396,7 +382,7 @@ export default function Home() {
                 Buy
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Purchase BSV satoshis with your card via Satoshi Shop.
+                Purchase BSV satoshis with your card via Ramp Network.
               </Typography>
               <Button
                 variant="contained"
@@ -407,19 +393,6 @@ export default function Home() {
               >
                 {isFunding ? 'Opening Buy Flow…' : 'Buy Sats'}
               </Button>
-
-              <Box sx={{ mt: 1.25, display: 'flex', justifyContent: 'center' }}>
-                <Button
-                  variant="text"
-                  color="inherit"
-                  size="small"
-                  disabled={isFunding}
-                  onClick={handlePendingTransactions}
-                  sx={{ textTransform: 'none', opacity: 0.9 }}
-                >
-                  {isFunding ? 'Opening…' : 'Pending Transactions'}
-                </Button>
-              </Box>
             </Box>
 
             <Box
@@ -427,24 +400,24 @@ export default function Home() {
                 flex: 1,
                 p: 2,
                 borderRadius: 3,
-                border: '1px dashed',
-                borderColor: 'divider',
-                opacity: 0.7
+                border: '1px solid',
+                borderColor: 'divider'
               }}
             >
               <Typography variant="h6" gutterBottom>
                 Sell
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Coming Soon
+                Sell your BSV for fiat via Ramp Network.
               </Typography>
               <Button
                 variant="outlined"
-                color="inherit"
+                color="primary"
                 fullWidth
-                disabled
+                disabled={isFunding}
+                onClick={handleSell}
               >
-                Sell (Coming Soon)
+                {isFunding ? 'Opening Sell Flow…' : 'Sell BSV'}
               </Button>
             </Box>
           </Stack>
