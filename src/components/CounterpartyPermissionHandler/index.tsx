@@ -77,6 +77,7 @@ const CounterpartyPermissionHandler = () => {
             }
           }))
         } catch {
+          // Ignore best-effort UI refresh notifications.
         }
       } catch (e) {
         console.error('Error granting counterparty permissions:', e)
