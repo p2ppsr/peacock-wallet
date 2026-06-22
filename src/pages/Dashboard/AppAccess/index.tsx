@@ -166,7 +166,9 @@ const AppAccess = () => {
     try {
       const revokedOutpoints: RevokedOutpoint[] = revoked.map(t => ({ txid: t.txid, outputIndex: t.outputIndex, counterparty: t.counterparty }));
       window.dispatchEvent(new CustomEvent('protocol-permissions-changed', { detail: { op: 'revoke-all', originator: normalizedDomain, revoked: revokedOutpoints } }));
-    } catch { }
+    } catch {
+      // Ignore best-effort UI refresh notifications.
+    }
   }, [managers?.permissionsManager, normalizedDomain, revokeMany]);
 
   const revokeAllBaskets = useCallback(async () => {
@@ -176,7 +178,9 @@ const AppAccess = () => {
     try {
       const revokedOutpoints: RevokedOutpoint[] = revoked.map(t => ({ txid: t.txid, outputIndex: t.outputIndex }));
       window.dispatchEvent(new CustomEvent('basket-access-changed', { detail: { op: 'revoke-all', originator: normalizedDomain, revoked: revokedOutpoints } }));
-    } catch { }
+    } catch {
+      // Ignore best-effort UI refresh notifications.
+    }
   }, [managers?.permissionsManager, normalizedDomain, revokeMany]);
 
   const revokeAllCertificates = useCallback(async () => {
@@ -186,7 +190,9 @@ const AppAccess = () => {
     try {
       const revokedOutpoints: RevokedOutpoint[] = revoked.map(t => ({ txid: t.txid, outputIndex: t.outputIndex }));
       window.dispatchEvent(new CustomEvent('cert-access-changed', { detail: { op: 'revoke-all', originator: normalizedDomain, revoked: revokedOutpoints } }));
-    } catch { }
+    } catch {
+      // Ignore best-effort UI refresh notifications.
+    }
   }, [managers?.permissionsManager, normalizedDomain, revokeMany]);
 
   const revokeSpendingAuthorization = useCallback(async () => {
@@ -197,7 +203,9 @@ const AppAccess = () => {
     try {
       const revokedOutpoints: RevokedOutpoint[] = [{ txid: auths[0].txid, outputIndex: auths[0].outputIndex }];
       window.dispatchEvent(new CustomEvent('spending-authorization-changed', { detail: { op: 'revoke', originator: normalizedDomain, revoked: revokedOutpoints } }));
-    } catch { }
+    } catch {
+      // Ignore best-effort UI refresh notifications.
+    }
   }, [managers?.permissionsManager, normalizedDomain]);
 
   const revokeEverything = useCallback(async () => {
@@ -225,38 +233,46 @@ const AppAccess = () => {
           }));
           window.dispatchEvent(new CustomEvent('protocol-permissions-changed', { detail: { op: 'revoke-all', originator: normalizedDomain, revoked: revokedOutpoints } }));
         }
-      } catch { }
+      } catch {
+        // Ignore best-effort UI refresh notifications.
+      }
 
       try {
         if (revokedBaskets.length) {
           const revokedOutpoints: RevokedOutpoint[] = revokedBaskets.map(t => ({ txid: t.txid, outputIndex: t.outputIndex }));
           window.dispatchEvent(new CustomEvent('basket-access-changed', { detail: { op: 'revoke-all', originator: normalizedDomain, revoked: revokedOutpoints } }));
         }
-      } catch { }
+      } catch {
+        // Ignore best-effort UI refresh notifications.
+      }
 
       try {
         if (revokedCertificates.length) {
           const revokedOutpoints: RevokedOutpoint[] = revokedCertificates.map(t => ({ txid: t.txid, outputIndex: t.outputIndex }));
           window.dispatchEvent(new CustomEvent('cert-access-changed', { detail: { op: 'revoke-all', originator: normalizedDomain, revoked: revokedOutpoints } }));
         }
-      } catch { }
+      } catch {
+        // Ignore best-effort UI refresh notifications.
+      }
 
       try {
         if (revokedSpending.length) {
           const revokedOutpoints: RevokedOutpoint[] = revokedSpending.map(t => ({ txid: t.txid, outputIndex: t.outputIndex }));
           window.dispatchEvent(new CustomEvent('spending-authorization-changed', { detail: { op: 'revoke', originator: normalizedDomain, revoked: revokedOutpoints } }));
         }
-      } catch { }
+      } catch {
+        // Ignore best-effort UI refresh notifications.
+      }
 
       return;
     } catch (error) {
       console.error('bulk revokeAllForOriginator failed, falling back to per-category revoke:', error);
     }
 
-    try { await revokeAllProtocols(); } catch { }
-    try { await revokeAllBaskets(); } catch { }
-    try { await revokeAllCertificates(); } catch { }
-    try { await revokeSpendingAuthorization(); } catch { }
+    try { await revokeAllProtocols(); } catch { /* Continue best-effort bulk revoke. */ }
+    try { await revokeAllBaskets(); } catch { /* Continue best-effort bulk revoke. */ }
+    try { await revokeAllCertificates(); } catch { /* Continue best-effort bulk revoke. */ }
+    try { await revokeSpendingAuthorization(); } catch { /* Continue best-effort bulk revoke. */ }
   }, [managers?.permissionsManager, normalizedDomain, revokeAllProtocols, revokeAllBaskets, revokeAllCertificates, revokeSpendingAuthorization]);
 
   const performRevoke = useCallback(async (action: RevokeAction) => {
