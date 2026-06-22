@@ -542,7 +542,7 @@ jobs:
           node-version: 22
 
       - name: Install CARS globally
-        run: npm i -g @bsv/cars-cli@latest
+        run: npm i -g @p2ppsr/cars-cli@latest
 
       - name: List frontend contents before CARS build
         run: |
@@ -551,4 +551,17 @@ jobs:
           ls -R frontend
 
       - name: Build and release artifact
-        run: cd binaries-site && cars build 0 && cars release now 0 --key "${{ secrets.CARS_PRIVATE_KEY }}"
+        env:
+          CARS_PRIVATE_KEY: ${{ secrets.CARS_PRIVATE_KEY }}
+        run: |
+          cd binaries-site
+          cars build 0
+          for attempt in 1 2 3; do
+            if cars release now 0 --key "$CARS_PRIVATE_KEY"; then
+              exit 0
+            fi
+            if [ "$attempt" = "3" ]; then
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
