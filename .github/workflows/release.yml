@@ -578,6 +578,7 @@ jobs:
 
           cd binaries-site
           cars doctor 0 --key "$CARS_PRIVATE_KEY" --network mainnet "${storage_args[@]}"
+          cars project ensure-balance 0 --key "$CARS_PRIVATE_KEY" --network mainnet "${storage_args[@]}" --min 1 --topup-to 250000
 
       - name: Build and release artifact
         env:
