@@ -26,18 +26,30 @@ import {
   WalletError
 } from '@bsv/sdk';
 import { listen, emit } from '@tauri-apps/api/event'
+import { invoke } from '@tauri-apps/api/core'
+import { startBinaryBridge } from './binaryBridge'
+import {
+  INVALID_ORIGIN,
+  INVALID_REQUEST,
+  normalizeBridgePath,
+  ORIGIN_REQUIRED,
+  UNKNOWN_WALLET_PATH
+} from './walletBridgePreLogin'
 
 class HttpRequestError extends Error {
   status: number;
+  code: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code = INVALID_REQUEST) {
     super(message);
     this.name = 'HttpRequestError';
     this.status = status;
+    this.code = code;
   }
 }
 
 type NormalizedHeaders = Record<string, string>;
+type HttpWalletResponse = { request_id: number; status: number; body?: unknown };
 
 let activeListenerToken = 0;
 let activeUnlisten: (() => void) | undefined;
@@ -210,6 +222,14 @@ const safeEmitResponse = async (requestId: number, status: number, payload: unkn
   }
 };
 
+async function setBridgeAcceptsRequests(accepts: boolean): Promise<void> {
+  try {
+    await invoke('set_wallet_bridge_accepts_requests', { accepts });
+  } catch (error) {
+    console.debug('Failed to update wallet bridge readiness:', error);
+  }
+}
+
 const DEFAULT_PORTS: Record<string, string> = {
   'http:': '80',
   'https:': '443'
@@ -218,7 +238,7 @@ const DEFAULT_PORTS: Record<string, string> = {
 const canonicalizeHost = (url: URL): string => {
   const hostname = url.hostname?.trim();
   if (!hostname) {
-    throw new HttpRequestError(400, 'Invalid origin host');
+    throw new HttpRequestError(400, 'Invalid origin host', INVALID_ORIGIN);
   }
 
   const normalizedHost = hostname.toLowerCase();
@@ -238,7 +258,7 @@ const normalizeOriginValue = (raw: string, errorMessage: string): string => {
   try {
     return canonicalizeHost(new URL(raw));
   } catch (error) {
-    throw new HttpRequestError(400, errorMessage);
+    throw new HttpRequestError(400, errorMessage, INVALID_ORIGIN);
   }
 };
 
@@ -258,23 +278,24 @@ function parseOrigin(headers: NormalizedHeaders): string {
     return normalizeOriginValue(candidate, 'Invalid Originator header');
   }
 
-  throw new HttpRequestError(400, 'Origin header is required');
+  throw new HttpRequestError(400, 'Origin header is required', ORIGIN_REQUIRED);
 }
 
 
-export const onWalletReady = async (wallet: WalletInterface): Promise<(() => void) | undefined> => {
+export const onWalletReady = async (rawWallet: WalletInterface): Promise<(() => void) | undefined> => {
   detachActiveListener();
   const listenerToken = ++activeListenerToken;
   const requestQueue = new AsyncRequestQueue(8, 256);
+  const wallet = rawWallet;
 
   const handleWalletRequest = async (payloadText: string, requestIdHint?: number): Promise<void> => {
     let responded = false;
     let requestId: number | undefined = requestIdHint;
-    let response: { request_id: number; status: number; body?: string } | undefined;
+    let response: HttpWalletResponse | undefined;
 
     try {
       if (!payloadText) {
-        throw new HttpRequestError(400, 'Invalid request payload');
+        throw new HttpRequestError(400, 'Invalid request payload', INVALID_REQUEST);
       }
 
       await yieldToMainThread();
@@ -286,7 +307,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
           : Number(req.request_id);
 
       if (!Number.isFinite(parsedRequestId)) {
-        throw new HttpRequestError(400, 'Invalid request_id');
+        throw new HttpRequestError(400, 'Invalid request_id', INVALID_REQUEST);
       }
 
       requestId = parsedRequestId;
@@ -296,18 +317,47 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
       req.headers = headers;
       const origin = parseOrigin(headers);
 
-      function responseFromError(error: unknown, method: string): { request_id: number; status: number; body: string } {
-        console.error(`${method} error:`, error)
+      function walletErrorBody(error: unknown): Record<string, unknown> {
         const json = WalletError.unknownToJson(error);
-        const body = JSON.parse(json);
+        let body: Record<string, unknown>;
+        try {
+          body = JSON.parse(json);
+        } catch {
+          body = {
+            message: error instanceof Error ? error.message : String(error)
+          };
+        }
+
+        const message = typeof body.message === 'string'
+          ? body.message
+          : error instanceof Error
+            ? error.message
+            : String(error);
+
+        if (message.includes('seekPermission=false')) {
+          return {
+            ...body,
+            code: body.code ?? 'WALLET_PERMISSION_REQUIRED',
+            message,
+            retryable: true
+          };
+        }
+
+        return body;
+      }
+
+      function responseFromError(error: unknown, method: string): { request_id: number; status: number; body: unknown } {
+        console.error(`${method} error:`, error)
         return {
           request_id: req.request_id,
           status: 400,
-          body
+          body: walletErrorBody(error)
         };
       }
 
-      switch (req.path) {
+      const path = normalizeBridgePath(req.path);
+
+      switch (path) {
         // 1. createAction
         case '/createAction': {
           try {
@@ -443,9 +493,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -467,9 +515,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -491,9 +537,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -515,9 +559,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -539,9 +581,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -563,9 +603,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -587,9 +625,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -611,9 +647,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -635,9 +669,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -759,9 +791,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -781,9 +811,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -803,9 +831,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -827,9 +853,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -849,9 +873,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -871,9 +893,7 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
             response = {
               request_id: req.request_id,
               status: 400,
-              body: JSON.stringify({
-                message: error instanceof Error ? error.message : String(error)
-              }),
+              body: walletErrorBody(error),
             }
           }
           break
@@ -883,7 +903,11 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
           response = {
             request_id: req.request_id,
             status: 404,
-            body: JSON.stringify({ error: 'Unknown wallet path: ' + req.path }),
+            body: JSON.stringify({
+              code: UNKNOWN_WALLET_PATH,
+              message: 'Unknown wallet path: ' + path,
+              retryable: false
+            }),
           }
           break
         }
@@ -900,7 +924,11 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
         console.warn('Wallet request rejected:', error.message);
         const id = requestId ?? extractRequestId(payloadText);
         if (typeof id === 'number') {
-          await safeEmitResponse(id, error.status, { message: error.message });
+          await safeEmitResponse(id, error.status, {
+            code: error.code,
+            message: error.message,
+            retryable: false
+          });
           responded = true;
         } else {
           console.warn('Unable to respond to wallet request without request_id');
@@ -923,6 +951,13 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
       }
     }
   };
+
+  let stopBinaryBridge: (() => void) | undefined
+  try {
+    stopBinaryBridge = await startBinaryBridge(rawWallet)
+  } catch (error) {
+    console.error('Failed to start binary substrate bridge:', error)
+  }
 
   const unlisten = await listen('http-request', (event) => {
     const payloadText = typeof event.payload === 'string' ? event.payload : '';
@@ -965,13 +1000,22 @@ export const onWalletReady = async (wallet: WalletInterface): Promise<(() => voi
       unlisten();
     } catch (error) {
       console.error('Failed to detach wallet http-request listener:', error);
-    } finally {
-      if (activeListenerToken === listenerToken) {
-        activeUnlisten = undefined;
-      }
     }
+    if (stopBinaryBridge) {
+      try {
+        stopBinaryBridge();
+      } catch (error) {
+        console.error('Failed to stop binary substrate bridge:', error);
+      }
+      stopBinaryBridge = undefined;
+    }
+    if (activeListenerToken === listenerToken) {
+      activeUnlisten = undefined;
+    }
+    void setBridgeAcceptsRequests(false);
   };
 
   activeUnlisten = wrappedUnlisten;
+  await setBridgeAcceptsRequests(true);
   return wrappedUnlisten;
 };

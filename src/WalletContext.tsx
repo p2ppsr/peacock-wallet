@@ -39,6 +39,7 @@ import { RequestInterceptorWallet } from './RequestInterceptorWallet'
 import { WalletProfile } from './types/WalletProfile'
 import { getIdentityClient, getRegistryClient } from './utils/clientFactories'
 import { reconcileStoredKeyMaterial } from './utils/keyMaterial'
+import { listen } from '@tauri-apps/api/event'
 
 // -----
 // Permission Configuration (User Wallet specific)
@@ -225,6 +226,13 @@ type SpendingRequest = {
   authorizationAmount: number
   renewal?: boolean
   lineItems: any[]
+}
+
+type WalletQaPermissionKind = 'basket' | 'certificate' | 'protocol' | 'spending'
+
+type WalletQaPermissionDecision = {
+  kind: WalletQaPermissionKind
+  decision: 'grant' | 'deny'
 }
 
 interface WalletContextProps {
@@ -1551,6 +1559,194 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       return newQueue
     })
   }
+
+  const walletQaStateRef = useRef({
+    basketRequests,
+    certificateRequests,
+    protocolRequests,
+    spendingRequests
+  })
+
+  const walletQaActionsRef = useRef({
+    permissionsManager: managers.permissionsManager,
+    advanceBasketQueue,
+    advanceCertificateQueue,
+    advanceProtocolQueue,
+    advanceSpendingQueue
+  })
+
+  useEffect(() => {
+    walletQaStateRef.current = {
+      basketRequests,
+      certificateRequests,
+      protocolRequests,
+      spendingRequests
+    }
+  }, [basketRequests, certificateRequests, protocolRequests, spendingRequests])
+
+  useEffect(() => {
+    walletQaActionsRef.current = {
+      permissionsManager: managers.permissionsManager,
+      advanceBasketQueue,
+      advanceCertificateQueue,
+      advanceProtocolQueue,
+      advanceSpendingQueue
+    }
+  })
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return undefined
+
+    let disposed = false
+    let cleanup: (() => void) | undefined
+
+    const parseDecision = (payload: unknown): WalletQaPermissionDecision | null => {
+      try {
+        const parsed = typeof payload === 'string' ? JSON.parse(payload) : payload
+        if (
+          parsed &&
+          typeof parsed === 'object' &&
+          ['basket', 'certificate', 'protocol', 'spending'].includes((parsed as any).kind) &&
+          ['grant', 'deny'].includes((parsed as any).decision)
+        ) {
+          return parsed as WalletQaPermissionDecision
+        }
+      } catch (error) {
+        console.warn('[wallet-qa] Failed to parse permission decision:', error)
+      }
+      return null
+    }
+
+    const dispatchPermissionChange = (
+      kind: WalletQaPermissionKind,
+      decision: WalletQaPermissionDecision['decision'],
+      request: any
+    ) => {
+      const op = decision === 'grant' ? 'grant' : 'deny'
+      if (kind === 'protocol') {
+        window.dispatchEvent(new CustomEvent('protocol-permissions-changed', {
+          detail: {
+            op,
+            originator: request.originator,
+            protocolID: request.protocolID,
+            protocolSecurityLevel: request.protocolSecurityLevel,
+            counterparty: request.counterparty
+          }
+        }))
+      } else if (kind === 'spending') {
+        window.dispatchEvent(new CustomEvent('spending-authorization-changed', {
+          detail: { op, originator: request.originator }
+        }))
+      } else if (kind === 'basket') {
+        window.dispatchEvent(new CustomEvent('basket-access-changed', {
+          detail: { op, originator: request.originator }
+        }))
+      } else if (kind === 'certificate') {
+        window.dispatchEvent(new CustomEvent('cert-access-changed', {
+          detail: { op, originator: request.originator }
+        }))
+      }
+    }
+
+    const hasActivePermissionRequest = (permissionsManager: WalletPermissionsManager, requestID: string) => {
+      const activeRequests = (permissionsManager as any).activeRequests
+      if (!activeRequests || typeof activeRequests.has !== 'function') return true
+      return activeRequests.has(requestID)
+    }
+
+    const sleep = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms))
+
+    const getRequestForKind = (kind: WalletQaPermissionKind) => {
+      const state = walletQaStateRef.current
+      return {
+        basket: state.basketRequests[0],
+        certificate: state.certificateRequests[0],
+        protocol: state.protocolRequests[0],
+        spending: state.spendingRequests[0]
+      }[kind] as any
+    }
+
+    const waitForActiveRequest = async (
+      permissionsManager: WalletPermissionsManager,
+      kind: WalletQaPermissionKind
+    ) => {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const request = getRequestForKind(kind)
+        if (request?.requestID && hasActivePermissionRequest(permissionsManager, request.requestID)) {
+          return request
+        }
+        await sleep(250)
+      }
+      return null
+    }
+
+    const handleDecision = async (payload: unknown) => {
+      const decision = parseDecision(payload)
+      if (!decision) {
+        console.warn('[wallet-qa] Ignoring invalid permission decision:', payload)
+        return
+      }
+
+      const actions = walletQaActionsRef.current
+      const permissionsManager = actions.permissionsManager
+      if (!permissionsManager) {
+        console.warn('[wallet-qa] No permissions manager is ready for permission decision')
+        return
+      }
+
+      const advanceByKind = {
+        basket: actions.advanceBasketQueue,
+        certificate: actions.advanceCertificateQueue,
+        protocol: actions.advanceProtocolQueue,
+        spending: actions.advanceSpendingQueue
+      }
+
+      const request = await waitForActiveRequest(permissionsManager, decision.kind)
+      if (!request?.requestID) {
+        console.warn(`[wallet-qa] No active ${decision.kind} permission request to ${decision.decision}`)
+        return
+      }
+
+      try {
+        if (decision.decision === 'grant') {
+          if (decision.kind === 'spending') {
+            await permissionsManager.grantPermission({
+              requestID: request.requestID,
+              ephemeral: false,
+              amount: request.authorizationAmount
+            })
+          } else {
+            await permissionsManager.grantPermission({ requestID: request.requestID })
+          }
+        } else {
+          await permissionsManager.denyPermission(request.requestID)
+        }
+
+        dispatchPermissionChange(decision.kind, decision.decision, request)
+      } catch (error) {
+        console.error(`[wallet-qa] Failed to ${decision.decision} ${decision.kind} permission:`, error)
+      } finally {
+        advanceByKind[decision.kind]()
+      }
+    }
+
+    listen('wallet-qa-permission-decision', event => {
+      void handleDecision(event.payload)
+    }).then(unlisten => {
+      if (disposed) {
+        unlisten()
+      } else {
+        cleanup = unlisten
+      }
+    }).catch(error => {
+      console.error('[wallet-qa] Failed to listen for permission decisions:', error)
+    })
+
+    return () => {
+      disposed = true
+      cleanup?.()
+    }
+  }, [])
 
   const registryFromWallet = useMemo(
     () => getRegistryClient(managers.walletManager, adminOriginator),
