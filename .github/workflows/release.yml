@@ -553,11 +553,16 @@ jobs:
       - name: Build and release artifact
         env:
           CARS_PRIVATE_KEY: ${{ secrets.CARS_PRIVATE_KEY }}
+          CARS_WALLET_STORAGE: ${{ secrets.CARS_WALLET_STORAGE }}
         run: |
           cd binaries-site
           cars build 0
+          storage_args=()
+          if [ -n "${CARS_WALLET_STORAGE:-}" ]; then
+            storage_args=(--storage "$CARS_WALLET_STORAGE")
+          fi
           for attempt in 1 2 3; do
-            if cars release now 0 --key "$CARS_PRIVATE_KEY"; then
+            if cars release now 0 --key "$CARS_PRIVATE_KEY" "${storage_args[@]}"; then
               exit 0
             fi
             if [ "$attempt" = "3" ]; then
