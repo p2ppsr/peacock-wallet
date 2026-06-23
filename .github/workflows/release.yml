@@ -550,23 +550,61 @@ jobs:
           echo "=== binaries-site/frontend ==="
           ls -R frontend
 
-      - name: Build and release artifact
+      - name: Check CARS release wallet
         env:
           CARS_PRIVATE_KEY: ${{ secrets.CARS_PRIVATE_KEY }}
           CARS_WALLET_STORAGE: ${{ secrets.CARS_WALLET_STORAGE }}
+          CARS_REQUEST_TIMEOUT_MS: 300000
         run: |
-          cd binaries-site
-          cars build 0
+          set -euo pipefail
+          if [ -z "${CARS_PRIVATE_KEY:-}" ]; then
+            echo "CARS_PRIVATE_KEY repository secret is required." >&2
+            exit 1
+          fi
+
           storage_args=()
           if [ -n "${CARS_WALLET_STORAGE:-}" ]; then
             storage_args=(--storage "$CARS_WALLET_STORAGE")
           fi
+
+          cd binaries-site
+          cars doctor 0 --key "$CARS_PRIVATE_KEY" --network mainnet "${storage_args[@]}"
+
+      - name: Build and release artifact
+        env:
+          CARS_PRIVATE_KEY: ${{ secrets.CARS_PRIVATE_KEY }}
+          CARS_WALLET_STORAGE: ${{ secrets.CARS_WALLET_STORAGE }}
+          CARS_REQUEST_TIMEOUT_MS: 300000
+        run: |
+          set -euo pipefail
+          if [ -z "${CARS_PRIVATE_KEY:-}" ]; then
+            echo "CARS_PRIVATE_KEY repository secret is required." >&2
+            exit 1
+          fi
+
+          storage_args=()
+          if [ -n "${CARS_WALLET_STORAGE:-}" ]; then
+            storage_args=(--storage "$CARS_WALLET_STORAGE")
+          fi
+
+          cd binaries-site
+          cars build 0
+
           for attempt in 1 2 3; do
-            if cars release now 0 --key "$CARS_PRIVATE_KEY" "${storage_args[@]}"; then
+            log_file="cars-release-attempt-${attempt}.log"
+            set +e
+            cars release now 0 --key "$CARS_PRIVATE_KEY" --network mainnet "${storage_args[@]}" 2>&1 | tee "$log_file"
+            status=${PIPESTATUS[0]}
+            set -e
+            if [ "$status" -eq 0 ] && grep -q "CARS_RELEASE_SUCCESS" "$log_file"; then
               exit 0
             fi
-            if [ "$attempt" = "3" ]; then
-              exit 1
+            if [ "$attempt" -eq 3 ]; then
+              if [ "$status" -eq 0 ]; then
+                echo "cars release exited successfully but did not emit CARS_RELEASE_SUCCESS." >&2
+                exit 1
+              fi
+              exit "$status"
             fi
-            sleep $((attempt * 20))
+            sleep "$((attempt * 20))"
           done
