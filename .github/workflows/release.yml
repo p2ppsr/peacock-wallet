@@ -555,6 +555,7 @@ jobs:
           CARS_PRIVATE_KEY: ${{ secrets.CARS_PRIVATE_KEY }}
           CARS_WALLET_STORAGE: ${{ secrets.CARS_WALLET_STORAGE }}
           CARS_REQUEST_TIMEOUT_MS: 300000
+          CARS_WALLET_STORAGE_TIMEOUT_MS: 120000
         run: |
           set -euo pipefail
           if [ -z "${CARS_PRIVATE_KEY:-}" ]; then
@@ -575,6 +576,7 @@ jobs:
           CARS_PRIVATE_KEY: ${{ secrets.CARS_PRIVATE_KEY }}
           CARS_WALLET_STORAGE: ${{ secrets.CARS_WALLET_STORAGE }}
           CARS_REQUEST_TIMEOUT_MS: 300000
+          CARS_WALLET_STORAGE_TIMEOUT_MS: 120000
         run: |
           set -euo pipefail
           if [ -z "${CARS_PRIVATE_KEY:-}" ]; then
