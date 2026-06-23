@@ -52,7 +52,7 @@ const filesToUpdate = [
     }
   },
   {
-    path: 'src-tauri/user-wallet.appdata.xml',
+    path: 'src-tauri/app.user.wallet.metainfo.xml',
     update: (content) => {
       // Update both version and release date
       const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD

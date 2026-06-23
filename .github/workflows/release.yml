@@ -43,6 +43,10 @@ jobs:
         with:
           node-version: lts/*
 
+      - name: Check release version sync
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/check-release-version.js "$GITHUB_REF_NAME"
+
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -540,6 +544,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+
+      - name: Check release version sync
+        if: startsWith(github.ref, 'refs/tags/')
+        run: node scripts/check-release-version.js "$GITHUB_REF_NAME"
 
       - name: Install CARS globally
         run: npm i -g @p2ppsr/cars-cli@latest
