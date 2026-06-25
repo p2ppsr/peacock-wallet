@@ -53,6 +53,8 @@
     .version-badge {
       display: inline-flex;
       align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
       gap: 0.4rem;
       padding: 0.35rem 0.75rem;
       border-radius: 999px;
@@ -64,6 +66,10 @@
 
     .version-badge strong {
       color: #cfe0ff;
+    }
+
+    .release-date {
+      color: #b7c7e6;
     }
 
     .hero h1 {
@@ -284,7 +290,10 @@
 <body>
   <main class="container">
     <header class="hero">
-      <span class="version-badge">Latest tag: <strong>__RELEASE_VERSION__</strong></span>
+      <span class="version-badge">
+        Latest release: <strong>__RELEASE_VERSION__</strong>
+        <span class="release-date">Released <time datetime="__RELEASE_DATE__">__RELEASE_DATE__</time></span>
+      </span>
       <h1>Download User Wallet</h1>
       <p class="intro">
         Stay connected to your peers with the secure User Wallet desktop app. Grab the build that matches
