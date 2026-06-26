@@ -186,6 +186,8 @@ use std::sync::Mutex;
 
 #[cfg(target_os = "macos")]
 static PREV_BUNDLE_ID: LazyLock<Mutex<Option<String>>> = LazyLock::new(|| Mutex::new(None));
+#[cfg(target_os = "macos")]
+static FOCUS_REQUEST_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 #[cfg(target_os = "macos")]
 #[allow(unexpected_cfgs)]
@@ -516,7 +518,6 @@ async fn handle_bridge_request(
     };
 
     let body_str = String::from_utf8_lossy(&whole_body).to_string();
-    let should_restore_window = should_restore_window_for_bridge_request(&path, &body_str);
 
     let (tx, rx) = oneshot::channel::<TsResponse>();
     pending_requests.insert(request_id, tx);
@@ -543,10 +544,6 @@ async fn handle_bridge_request(
             return Ok(res);
         }
     };
-
-    if should_restore_window {
-        restore_window_for_bridge_request(&main_window);
-    }
 
     if let Err(err) = main_window.emit("http-request", event_json) {
         eprintln!(
@@ -585,9 +582,17 @@ async fn handle_bridge_request(
 }
 
 fn request_delayed_window_focus(app_handle: AppHandle, context: &'static str) {
+    #[cfg(target_os = "macos")]
+    let focus_generation = FOCUS_REQUEST_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+
     std::thread::spawn(move || {
         for delay_ms in [80_u64, 220, 500] {
             std::thread::sleep(std::time::Duration::from_millis(delay_ms));
+            #[cfg(target_os = "macos")]
+            if FOCUS_REQUEST_GENERATION.load(Ordering::SeqCst) != focus_generation {
+                return;
+            }
+
             if let Some(window) = app_handle.get_webview_window(MAIN_WINDOW_NAME) {
                 #[cfg(target_os = "macos")]
                 if let Err(err) = activate_current_application() {
@@ -644,30 +649,16 @@ fn raise_window_for_user(window: &WebviewWindow, context: &'static str) {
     request_delayed_window_focus(window.app_handle().clone(), context);
 }
 
-fn restore_window_for_bridge_request(window: &WebviewWindow) {
-    raise_window_for_user(window, "Bridge window");
-}
-
-fn should_restore_window_for_bridge_request(path: &str, body: &str) -> bool {
-    if matches!(path, "/getVersion" | "/isAuthenticated" | "/getNetwork") {
-        return false;
-    }
-
-    if let Ok(value) = serde_json::from_str::<serde_json::Value>(body) {
-        if value
-            .get("seekPermission")
-            .and_then(|seek_permission| seek_permission.as_bool())
-            == Some(false)
-        {
-            return false;
+#[tauri::command]
+fn is_focused(window: Window) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        let app_identifier = window.app_handle().config().identifier.clone();
+        if let Some(bundle_id) = capture_frontmost_bundle_identifier() {
+            return bundle_id == app_identifier;
         }
     }
 
-    true
-}
-
-#[tauri::command]
-fn is_focused(window: Window) -> bool {
     match window.is_focused() {
         Ok(focused) => focused,
         Err(_) => false,
@@ -812,13 +803,15 @@ fn relinquish_focus(window: Window) {
 
     #[cfg(target_os = "macos")]
     {
+        FOCUS_REQUEST_GENERATION.fetch_add(1, Ordering::SeqCst);
+
         // Try to restore focus to previous app
         let prev_bundle_id = {
             let prev = PREV_BUNDLE_ID.lock().unwrap();
             prev.clone()
         };
         if let Some(bundle_id) = prev_bundle_id {
-            if !bundle_id.is_empty() && bundle_id != "com.apple.finder" {
+            if !bundle_id.is_empty() && bundle_id != window.app_handle().config().identifier {
                 if let Err(e) = activate_application_by_bundle_id(&bundle_id) {
                     eprintln!("MacOS failed to re-activate previous app: {}", e);
                 }
@@ -894,7 +887,6 @@ fn main() {
         .setup(|app| {
             // Extract the main window.
             let main_window = app.get_webview_window(MAIN_WINDOW_NAME).unwrap();
-            restore_window_for_bridge_request(&main_window);
 
             // --- Re-open window when the Dock/taskbar icon is clicked ---
             {

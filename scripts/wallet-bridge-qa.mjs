@@ -9,7 +9,17 @@ const origin = process.env.WALLET_TEST_ORIGIN ?? 'http://127.0.0.1:7171'
 const perRequestMs = Number(process.env.WALLET_QA_REQUEST_TIMEOUT_MS ?? 2500)
 const promptUi = process.argv.includes('--prompt-ui')
 const promptQa = process.argv.includes('--prompt-qa')
+const focusQa = process.argv.includes('--focus-qa')
 const noPromptDiagnostic = process.argv.includes('--no-prompt-diagnostic')
+const walletBundleId = process.env.WALLET_QA_WALLET_BUNDLE_ID ?? 'app.user.wallet'
+const walletAppNames = (process.env.WALLET_QA_WALLET_APP_NAMES ?? 'user-wallet,User Wallet')
+  .split(',')
+  .map(name => name.trim())
+  .filter(Boolean)
+const focusTargetBundleId = process.env.WALLET_QA_FOCUS_TARGET_BUNDLE_ID ?? 'com.apple.finder'
+const focusSettleMs = Number(process.env.WALLET_QA_FOCUS_SETTLE_MS ?? 900)
+const focusTimeoutMs = Number(process.env.WALLET_QA_FOCUS_TIMEOUT_MS ?? 8000)
+const focusReturnTimeoutMs = Number(process.env.WALLET_QA_FOCUS_RETURN_TIMEOUT_MS ?? 5000)
 
 const checks = []
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
@@ -18,6 +28,11 @@ function assert(condition, message) {
   if (!condition) {
     throw new Error(message)
   }
+}
+
+if (focusQa) {
+  assert(process.platform === 'darwin', '--focus-qa requires macOS')
+  assert(promptQa, '--focus-qa requires --prompt-qa so focus can be tested without accessibility clicks')
 }
 
 async function walletRequest(path, body = {}, options = {}) {
@@ -93,6 +108,87 @@ async function check(name, fn) {
   checks.push({ name, ms: Date.now() - started })
 }
 
+async function frontmostApp() {
+  const script = `
+import AppKit
+let app = NSWorkspace.shared.frontmostApplication
+print(app?.bundleIdentifier ?? "")
+print(app?.localizedName ?? "")
+print(app?.processIdentifier ?? -1)
+`
+  const { stdout } = await execFileAsync('swift', ['-e', script])
+  const [bundleId = '', name = '', pid = '-1'] = stdout.split('\n').map(line => line.trim())
+  return { bundleId, name, pid }
+}
+
+async function activateBundleId(bundleId) {
+  const script = `tell application id "${bundleId}" to activate`
+  await execFileAsync('osascript', ['-e', script])
+}
+
+async function waitForFrontmostBundleId(expectedBundleId, label, timeoutMs = focusTimeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  let lastApp = { bundleId: '', name: '', pid: '-1' }
+
+  while (Date.now() < deadline) {
+    lastApp = await frontmostApp()
+    if (lastApp.bundleId === expectedBundleId) {
+      return
+    }
+    await sleep(150)
+  }
+
+  throw new Error(`${label}: expected frontmost ${expectedBundleId}, got ${formatFrontmostApp(lastApp)}`)
+}
+
+async function putFocusAwayFromWallet() {
+  await activateBundleId(focusTargetBundleId)
+  await waitForFrontmostBundleId(focusTargetBundleId, 'external focus setup')
+}
+
+async function assertWalletDidNotBecomeFrontmost(label) {
+  await sleep(focusSettleMs)
+  const current = await frontmostApp()
+  assert(
+    !isWalletFrontmost(current),
+    `${label}: wallet became frontmost without a visible prompt (${formatFrontmostApp(current)})`
+  )
+}
+
+async function assertWalletBecameFrontmost(label) {
+  const deadline = Date.now() + focusTimeoutMs
+  let lastApp = { bundleId: '', name: '', pid: '-1' }
+
+  while (Date.now() < deadline) {
+    lastApp = await frontmostApp()
+    if (isWalletFrontmost(lastApp)) {
+      return
+    }
+    await sleep(150)
+  }
+
+  throw new Error(`${label}: expected wallet frontmost, got ${formatFrontmostApp(lastApp)}`)
+}
+
+async function assertFocusReturned(label) {
+  await waitForFrontmostBundleId(focusTargetBundleId, label, focusReturnTimeoutMs)
+}
+
+async function assertNoPromptRequestDoesNotFocus(label, path, body = {}, options = {}) {
+  await putFocusAwayFromWallet()
+  const result = await walletRequest(path, body, options)
+  await assertWalletDidNotBecomeFrontmost(label)
+  return result
+}
+
+function isWalletFrontmost(app) {
+  return app.bundleId === walletBundleId || walletAppNames.includes(app.name)
+}
+
+function formatFrontmostApp(app) {
+  return `${app.bundleId || 'no-bundle'}:${app.name || 'unknown'}:${app.pid || 'unknown'}`
+}
+
 async function submitQaPermissionDecision(decision, kind = 'protocol') {
   const result = await walletRequest('/__wallet-qa/permission-decision', {
     kind,
@@ -122,6 +218,9 @@ end tell
 
 async function exercisePermissionDecision(decision) {
   const protocolName = `userwallet bridge qa ${decision} ${Date.now()}`
+  if (focusQa) {
+    await putFocusAwayFromWallet()
+  }
   const pending = walletRequestWaitingForUser('/getPublicKey', {
     protocolID: [1, protocolName],
     keyID: 'qa-public',
@@ -129,13 +228,20 @@ async function exercisePermissionDecision(decision) {
     seekPermission: true
   })
 
-  await sleep(800)
+  if (focusQa) {
+    await assertWalletBecameFrontmost(`permission prompt ${decision} focus`)
+  } else {
+    await sleep(800)
+  }
   if (promptQa) {
     await submitQaPermissionDecision(decision)
   } else {
     await clickPermissionDecision(decision)
   }
   const result = await pending
+  if (focusQa) {
+    await assertFocusReturned(`permission prompt ${decision} focus return`)
+  }
 
   if (decision === 'grant') {
     assert(result.status === 200, `expected grant to resolve 200, got ${result.status}: ${result.text}`)
@@ -200,6 +306,16 @@ try {
     assert(result.status === 404, `expected 404, got ${result.status}: ${result.text}`)
     assert(result.data?.code === 'UNKNOWN_WALLET_PATH', `expected UNKNOWN_WALLET_PATH: ${result.text}`)
   })
+
+  if (focusQa) {
+    await check('no-prompt bridge calls do not focus wallet', async () => {
+      const versionResult = await assertNoPromptRequestDoesNotFocus('getVersion focus regression', '/getVersion')
+      assert(versionResult.status === 200, `expected getVersion 200, got ${versionResult.status}: ${versionResult.text}`)
+
+      const unknownResult = await assertNoPromptRequestDoesNotFocus('unknown path focus regression', '/notARealWalletCall')
+      assert(unknownResult.status === 404, `expected unknown path 404, got ${unknownResult.status}: ${unknownResult.text}`)
+    })
+  }
 
   if (noPromptDiagnostic) {
     await check('diagnostic getPublicKey seekPermission=false does not hang', async () => {

@@ -257,7 +257,10 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   const { isFocused, onFocusRequested, onFocusRelinquished, setBasketAccessModalOpen, setCertificateAccessModalOpen, setProtocolAccessModalOpen, setSpendingAuthorizationModalOpen, setGroupPermissionModalOpen, setCounterpartyPermissionModalOpen } = useContext(UserContext);
 
   // Track if we were originally focused
-  const [wasOriginallyFocused, setWasOriginallyFocused] = useState(false)
+  const wasOriginallyFocusedRef = useRef(false)
+  const didRequestPromptFocusRef = useRef(false)
+  const groupDidRequestFocusRef = useRef(false)
+  const pendingGroupFocusRequestIdRef = useRef<string | null>(null)
 
   // Separate request queues for basket and certificate access
   const [basketRequests, setBasketRequests] = useState<BasketAccessRequest[]>([])
@@ -582,8 +585,9 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         // If no requests were queued, handle focusing logic right away
         if (wasEmpty) {
           isFocused().then(currentlyFocused => {
-            setWasOriginallyFocused(currentlyFocused)
+            wasOriginallyFocusedRef.current = currentlyFocused
             if (!currentlyFocused) {
+              didRequestPromptFocusRef.current = true
               onFocusRequested()
             }
             setBasketAccessModalOpen(true)
@@ -627,8 +631,9 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       if (wasEmpty) {
         setCounterpartyPermissionModalOpen(true)
         isFocused().then(currentlyFocused => {
-          setWasOriginallyFocused(currentlyFocused)
+          wasOriginallyFocusedRef.current = currentlyFocused
           if (!currentlyFocused) {
+            didRequestPromptFocusRef.current = true
             onFocusRequested()
           }
         })
@@ -674,8 +679,9 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         // If no requests were queued, handle focusing logic right away
         if (wasEmpty) {
           isFocused().then(currentlyFocused => {
-            setWasOriginallyFocused(currentlyFocused)
+            wasOriginallyFocusedRef.current = currentlyFocused
             if (!currentlyFocused) {
+              didRequestPromptFocusRef.current = true
               onFocusRequested()
             }
             setCertificateAccessModalOpen(true)
@@ -760,8 +766,9 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         // If no requests were queued, handle focusing logic right away
         if (wasEmpty) {
           isFocused().then(currentlyFocused => {
-            setWasOriginallyFocused(currentlyFocused)
+            wasOriginallyFocusedRef.current = currentlyFocused
             if (!currentlyFocused) {
+              didRequestPromptFocusRef.current = true
               onFocusRequested()
             }
             setProtocolAccessModalOpen(true)
@@ -828,8 +835,9 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         // If no requests were queued, handle focusing logic right away
         if (wasEmpty) {
           isFocused().then(currentlyFocused => {
-            setWasOriginallyFocused(currentlyFocused)
+            wasOriginallyFocusedRef.current = currentlyFocused
             if (!currentlyFocused) {
+              didRequestPromptFocusRef.current = true
               onFocusRequested()
             }
             setSpendingAuthorizationModalOpen(true)
@@ -889,9 +897,13 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         // If no requests were queued, handle focusing logic right away
         if (wasEmpty) {
           setGroupPhaseSafe('pending')
+          pendingGroupFocusRequestIdRef.current = requestID
+          groupDidRequestFocusRef.current = false
           isFocused().then(currentlyFocused => {
-            setWasOriginallyFocused(currentlyFocused)
+            if (pendingGroupFocusRequestIdRef.current !== requestID) return
+            wasOriginallyFocusedRef.current = currentlyFocused
             if (!currentlyFocused) {
+              groupDidRequestFocusRef.current = true
               onFocusRequested()
             }
             setGroupPermissionModalOpen(true)
@@ -1482,7 +1494,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const newQueue = prev.slice(1)
       if (newQueue.length === 0) {
         setBasketAccessModalOpen(false)
-        if (!wasOriginallyFocused) {
+        if (didRequestPromptFocusRef.current || !wasOriginallyFocusedRef.current) {
+          didRequestPromptFocusRef.current = false
           onFocusRelinquished()
         }
       }
@@ -1496,7 +1509,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const newQueue = prev.slice(1)
       if (newQueue.length === 0) {
         setCertificateAccessModalOpen(false)
-        if (!wasOriginallyFocused) {
+        if (didRequestPromptFocusRef.current || !wasOriginallyFocusedRef.current) {
+          didRequestPromptFocusRef.current = false
           onFocusRelinquished()
         }
       }
@@ -1510,7 +1524,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const newQueue = prev.slice(1)
       if (newQueue.length === 0) {
         setProtocolAccessModalOpen(false)
-        if (!wasOriginallyFocused) {
+        if (didRequestPromptFocusRef.current || !wasOriginallyFocusedRef.current) {
+          didRequestPromptFocusRef.current = false
           onFocusRelinquished()
         }
       }
@@ -1524,7 +1539,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const newQueue = prev.slice(1)
       if (newQueue.length === 0) {
         setSpendingAuthorizationModalOpen(false)
-        if (!wasOriginallyFocused) {
+        if (didRequestPromptFocusRef.current || !wasOriginallyFocusedRef.current) {
+          didRequestPromptFocusRef.current = false
           onFocusRelinquished()
         }
       }
@@ -1538,8 +1554,10 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const newQueue = prev.slice(1)
       if (newQueue.length === 0) {
         setGroupPhaseSafe('idle')
+        pendingGroupFocusRequestIdRef.current = null
         setGroupPermissionModalOpen(false)
-        if (!wasOriginallyFocused) {
+        if (groupDidRequestFocusRef.current) {
+          groupDidRequestFocusRef.current = false
           onFocusRelinquished()
         }
       }
@@ -1552,7 +1570,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const newQueue = prev.slice(1)
       if (newQueue.length === 0) {
         setCounterpartyPermissionModalOpen(false)
-        if (!wasOriginallyFocused) {
+        if (didRequestPromptFocusRef.current || !wasOriginallyFocusedRef.current) {
+          didRequestPromptFocusRef.current = false
           onFocusRelinquished()
         }
       }
