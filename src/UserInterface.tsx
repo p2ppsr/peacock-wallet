@@ -18,6 +18,7 @@ import { WalletInterface } from '@bsv/sdk'
 import { AppThemeProvider } from './components/Theme'
 import UpdateManager from './components/UpdateManager'
 import PageLoading from './components/PageLoading'
+import type { WalletBridgeInspector } from './onWalletReady'
 
 // Define queries for responsive design
 const queries = {
@@ -33,7 +34,7 @@ import GroupPermissionHandler from './components/GroupPermissionHandler'
 import CounterpartyPermissionHandler from './components/CounterpartyPermissionHandler'
 
 interface UserInterfaceProps {
-  onWalletReady: (wallet: WalletInterface) => Promise<(() => void) | undefined>;
+  onWalletReady: (wallet: WalletInterface, inspector?: WalletBridgeInspector) => Promise<(() => void) | undefined>;
   /**
    * Native handlers that can be injected to provide platform-specific functionality.
    * Includes:

@@ -1,6 +1,7 @@
 import { listen, emit, UnlistenFn } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { buildPreLoginWalletResponse, normalizeBridgeHeaders, normalizeBridgePath } from './walletBridgePreLogin'
+import { manifestUrlForOriginator, parseBridgeOrigin } from './walletBridgeOrigin'
 
 async function setBridgeAcceptsRequests(accepts: boolean): Promise<void> {
   try {
@@ -12,19 +13,10 @@ async function setBridgeAcceptsRequests(accepts: boolean): Promise<void> {
 
 async function cacheManifestFromHeaders(headers: unknown): Promise<void> {
   const headersObj = normalizeBridgeHeaders(headers)
-  const rawOrigin = headersObj.origin
-  const rawOriginator = headersObj.originator
   let manifestUrl: string | null = null
 
   try {
-    if (rawOrigin) {
-      const u = new URL(rawOrigin)
-      manifestUrl = `https://${u.host}/manifest.json`
-    } else if (rawOriginator) {
-      const candidate = rawOriginator.includes('://') ? rawOriginator : `http://${rawOriginator}`
-      const u = new URL(candidate)
-      manifestUrl = `https://${u.host}/manifest.json`
-    }
+    manifestUrl = manifestUrlForOriginator(parseBridgeOrigin(headersObj))
   } catch (e) {
     console.warn('Failed to parse origin header for manifest URL:', e)
   }

@@ -29,12 +29,17 @@ import { listen, emit } from '@tauri-apps/api/event'
 import { invoke } from '@tauri-apps/api/core'
 import { startBinaryBridge } from './binaryBridge'
 import {
-  INVALID_ORIGIN,
   INVALID_REQUEST,
   normalizeBridgePath,
-  ORIGIN_REQUIRED,
   UNKNOWN_WALLET_PATH
 } from './walletBridgePreLogin'
+import {
+  normalizeBridgeHeaders,
+  normalizeBridgeOriginatorValue,
+  parseBridgeOrigin,
+  RESERVED_ORIGIN,
+  WalletBridgeOriginError
+} from './walletBridgeOrigin'
 
 class HttpRequestError extends Error {
   status: number;
@@ -48,8 +53,22 @@ class HttpRequestError extends Error {
   }
 }
 
-type NormalizedHeaders = Record<string, string>;
 type HttpWalletResponse = { request_id: number; status: number; body?: unknown };
+export type PermissionBaselineCounts = {
+  protocols: number;
+  baskets: number;
+  certificates: number;
+  spending: number;
+};
+export type ActivePromptSummary = {
+  kind: 'basket' | 'certificate' | 'protocol' | 'spending' | 'group' | 'counterparty';
+  originator?: string;
+  categories?: string[];
+};
+export type WalletBridgeInspector = {
+  getPermissionBaseline: (originator: string) => Promise<PermissionBaselineCounts>;
+  getActivePromptSummary?: () => ActivePromptSummary | null;
+};
 
 let activeListenerToken = 0;
 let activeUnlisten: (() => void) | undefined;
@@ -66,29 +85,6 @@ const detachActiveListener = () => {
   } finally {
     activeUnlisten = undefined;
   }
-};
-
-const normalizeHeaders = (headers: unknown): NormalizedHeaders => {
-  const normalized: NormalizedHeaders = {};
-
-  if (Array.isArray(headers)) {
-    for (const entry of headers) {
-      if (Array.isArray(entry) && entry.length >= 2) {
-        const key = String(entry[0]).toLowerCase();
-        const value = String(entry[1]);
-        normalized[key] = value;
-      }
-    }
-    return normalized;
-  }
-
-  if (headers && typeof headers === 'object') {
-    for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
-      normalized[key.toLowerCase()] = String(value);
-    }
-  }
-
-  return normalized;
 };
 
 const extractRequestId = (payload: unknown): number | undefined => {
@@ -230,59 +226,28 @@ async function setBridgeAcceptsRequests(accepts: boolean): Promise<void> {
   }
 }
 
-const DEFAULT_PORTS: Record<string, string> = {
-  'http:': '80',
-  'https:': '443'
-};
-
-const canonicalizeHost = (url: URL): string => {
-  const hostname = url.hostname?.trim();
-  if (!hostname) {
-    throw new HttpRequestError(400, 'Invalid origin host', INVALID_ORIGIN);
+function toHttpRequestError(error: unknown): HttpRequestError {
+  if (error instanceof WalletBridgeOriginError) {
+    return new HttpRequestError(error.code === RESERVED_ORIGIN ? 403 : 400, error.message, error.code);
   }
-
-  const normalizedHost = hostname.toLowerCase();
-  const needsBrackets = normalizedHost.includes(':');
-  const baseHost = needsBrackets ? `[${normalizedHost}]` : normalizedHost;
-  const port = url.port?.trim();
-  const defaultPort = DEFAULT_PORTS[url.protocol];
-
-  if (port && (!defaultPort || port !== defaultPort)) {
-    return `${baseHost}:${port}`;
-  }
-
-  return baseHost;
-};
-
-const normalizeOriginValue = (raw: string, errorMessage: string): string => {
-  try {
-    return canonicalizeHost(new URL(raw));
-  } catch (error) {
-    throw new HttpRequestError(400, errorMessage, INVALID_ORIGIN);
-  }
-};
-
-// Parse the origin header and turn it into a canonical fqdn (e.g. projectbabbage.com:8080)
-// Handles both origin and legacy originator headers
-function parseOrigin(headers: NormalizedHeaders): string {
-  const rawOrigin = headers['origin'];
-  if (rawOrigin) {
-    return normalizeOriginValue(rawOrigin, 'Invalid Origin header');
-  }
-
-  const rawOriginator = headers['originator'];
-  if (rawOriginator) {
-    const candidate = rawOriginator.includes('://')
-      ? rawOriginator
-      : `http://${rawOriginator}`;
-    return normalizeOriginValue(candidate, 'Invalid Originator header');
-  }
-
-  throw new HttpRequestError(400, 'Origin header is required', ORIGIN_REQUIRED);
+  return new HttpRequestError(400, error instanceof Error ? error.message : String(error));
 }
 
+function inspectOriginatorFromPath(path: string): string {
+  const parsed = new URL(path, 'http://wallet.local');
+  const raw = parsed.searchParams.get('originator');
+  if (!raw) throw new HttpRequestError(400, 'originator query parameter is required', INVALID_REQUEST);
+  try {
+    return normalizeBridgeOriginatorValue(raw);
+  } catch (error) {
+    throw toHttpRequestError(error);
+  }
+}
 
-export const onWalletReady = async (rawWallet: WalletInterface): Promise<(() => void) | undefined> => {
+export const onWalletReady = async (
+  rawWallet: WalletInterface,
+  inspector?: WalletBridgeInspector
+): Promise<(() => void) | undefined> => {
   detachActiveListener();
   const listenerToken = ++activeListenerToken;
   const requestQueue = new AsyncRequestQueue(8, 256);
@@ -313,9 +278,14 @@ export const onWalletReady = async (rawWallet: WalletInterface): Promise<(() => 
       requestId = parsedRequestId;
       req.request_id = parsedRequestId;
 
-      const headers = normalizeHeaders(req.headers);
+      const headers = normalizeBridgeHeaders(req.headers);
       req.headers = headers;
-      const origin = parseOrigin(headers);
+      let origin: string;
+      try {
+        origin = parseBridgeOrigin(headers);
+      } catch (error) {
+        throw toHttpRequestError(error);
+      }
 
       function walletErrorBody(error: unknown): Record<string, unknown> {
         const json = WalletError.unknownToJson(error);
@@ -358,6 +328,39 @@ export const onWalletReady = async (rawWallet: WalletInterface): Promise<(() => 
       const path = normalizeBridgePath(req.path);
 
       switch (path) {
+        case '/__wallet-inspect/permission-baseline': {
+          if (!import.meta.env.DEV || !inspector) {
+            response = {
+              request_id: req.request_id,
+              status: 404,
+              body: JSON.stringify({
+                code: UNKNOWN_WALLET_PATH,
+                message: 'Unknown wallet path: ' + path,
+                retryable: false
+              }),
+            }
+            break
+          }
+
+          try {
+            const targetOriginator = inspectOriginatorFromPath(req.path)
+            const counts = await inspector.getPermissionBaseline(targetOriginator)
+            response = {
+              request_id: req.request_id,
+              status: 200,
+              body: JSON.stringify({
+                originator: targetOriginator,
+                counts,
+                activePrompt: inspector.getActivePromptSummary?.() ?? null
+              }),
+            }
+          } catch (error) {
+            if (error instanceof HttpRequestError) throw error
+            response = responseFromError(error, 'permissionBaseline');
+          }
+          break
+        }
+
         // 1. createAction
         case '/createAction': {
           try {

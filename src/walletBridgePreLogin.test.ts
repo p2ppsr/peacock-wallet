@@ -3,6 +3,7 @@ import {
   buildPreLoginWalletResponse,
   INVALID_ORIGIN,
   ORIGIN_REQUIRED,
+  RESERVED_ORIGIN,
   UNKNOWN_WALLET_PATH,
   WALLET_BRC100_VERSION,
   WALLET_NOT_AUTHENTICATED
@@ -83,6 +84,84 @@ describe('buildPreLoginWalletResponse', () => {
       code: INVALID_ORIGIN,
       retryable: false
     })
+  })
+
+  it('rejects overlong originator values', () => {
+    const response = buildPreLoginWalletResponse({
+      request_id: 42,
+      headers: {
+        Originator: `${'a'.repeat(251)}.example`
+      },
+      path: '/getVersion'
+    })
+
+    expect(response.status).toBe(400)
+    expect(parsedBody(response)).toMatchObject({
+      code: INVALID_ORIGIN,
+      retryable: false
+    })
+  })
+
+  it('rejects the internal admin originator over the legacy originator header', () => {
+    const response = buildPreLoginWalletResponse({
+      request_id: 42,
+      headers: {
+        Originator: 'metanet-client.wallet.internal'
+      },
+      path: '/getVersion'
+    })
+
+    expect(response.status).toBe(403)
+    expect(parsedBody(response)).toMatchObject({
+      code: RESERVED_ORIGIN,
+      retryable: false
+    })
+  })
+
+  it('rejects the legacy admin.com originator over the legacy originator header', () => {
+    const response = buildPreLoginWalletResponse({
+      request_id: 42,
+      headers: {
+        Originator: 'admin.com'
+      },
+      path: '/getVersion'
+    })
+
+    expect(response.status).toBe(403)
+    expect(parsedBody(response)).toMatchObject({
+      code: RESERVED_ORIGIN,
+      retryable: false
+    })
+  })
+
+  it('rejects reserved browser origins directly', () => {
+    const response = buildPreLoginWalletResponse({
+      request_id: 42,
+      headers: {
+        Origin: 'https://admin.com'
+      },
+      path: '/getVersion'
+    })
+
+    expect(response.status).toBe(403)
+    expect(parsedBody(response)).toMatchObject({
+      code: RESERVED_ORIGIN,
+      retryable: false
+    })
+  })
+
+  it('prefers real browser Origin over spoofable legacy Originator', () => {
+    const response = buildPreLoginWalletResponse({
+      request_id: 42,
+      headers: {
+        Origin: 'https://example.com',
+        Originator: 'admin.com'
+      },
+      path: '/getVersion'
+    })
+
+    expect(response.status).toBe(200)
+    expect(parsedBody(response)).toEqual({ version: WALLET_BRC100_VERSION })
   })
 
   it('returns a deterministic 404 for unknown wallet paths', () => {

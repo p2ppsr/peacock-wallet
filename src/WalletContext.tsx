@@ -40,6 +40,7 @@ import { WalletProfile } from './types/WalletProfile'
 import { getIdentityClient, getRegistryClient } from './utils/clientFactories'
 import { reconcileStoredKeyMaterial } from './utils/keyMaterial'
 import { listen } from '@tauri-apps/api/event'
+import type { ActivePromptSummary, WalletBridgeInspector } from './onWalletReady'
 
 // -----
 // Permission Configuration (User Wallet specific)
@@ -237,7 +238,7 @@ type WalletQaPermissionDecision = {
 
 interface WalletContextProps {
   children?: React.ReactNode;
-  onWalletReady: (wallet: WalletInterface) => Promise<(() => void) | undefined>;
+  onWalletReady: (wallet: WalletInterface, inspector?: WalletBridgeInspector) => Promise<(() => void) | undefined>;
 }
 
 export const WalletContextProvider: React.FC<WalletContextProps> = ({
@@ -1396,7 +1397,100 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   // Track recent origins to prevent duplicate updates in a short time period
   const recentOriginsRef = useRef<Map<string, number>>(new Map());
   const walletListenerRef = useRef<(() => void) | undefined>(undefined);
+  const walletQaStateRef = useRef({
+    basketRequests,
+    certificateRequests,
+    protocolRequests,
+    spendingRequests,
+    groupPermissionRequests,
+    counterpartyPermissionRequests
+  })
   const DEBOUNCE_TIME_MS = 5000; // 5 seconds debounce
+
+  useEffect(() => {
+    walletQaStateRef.current = {
+      basketRequests,
+      certificateRequests,
+      protocolRequests,
+      spendingRequests,
+      groupPermissionRequests,
+      counterpartyPermissionRequests
+    }
+  }, [
+    basketRequests,
+    certificateRequests,
+    protocolRequests,
+    spendingRequests,
+    groupPermissionRequests,
+    counterpartyPermissionRequests
+  ])
+
+  const getActivePromptSummary = useCallback((): ActivePromptSummary | null => {
+    const state = walletQaStateRef.current
+    const grouped = state.groupPermissionRequests[0]
+    if (grouped) {
+      const permissions = (grouped as any).permissions ?? {}
+      const categories = [
+        permissions.protocolPermissions?.length ? 'protocol' : null,
+        permissions.basketAccess?.length ? 'basket' : null,
+        permissions.certificateAccess?.length ? 'certificate' : null,
+        permissions.spendingAuthorization ? 'spending' : null
+      ].filter(Boolean) as string[]
+
+      return {
+        kind: 'group',
+        originator: grouped.originator,
+        categories
+      }
+    }
+
+    const counterparty = state.counterpartyPermissionRequests[0]
+    if (counterparty) {
+      return {
+        kind: 'counterparty',
+        originator: counterparty.originator,
+        categories: ['protocol']
+      }
+    }
+
+    const protocol = state.protocolRequests[0]
+    if (protocol) {
+      return {
+        kind: 'protocol',
+        originator: protocol.originator,
+        categories: ['protocol']
+      }
+    }
+
+    const basket = state.basketRequests[0]
+    if (basket) {
+      return {
+        kind: 'basket',
+        originator: basket.originator,
+        categories: ['basket']
+      }
+    }
+
+    const certificate = state.certificateRequests[0]
+    if (certificate) {
+      return {
+        kind: 'certificate',
+        originator: certificate.originator,
+        categories: ['certificate']
+      }
+    }
+
+    const spending = state.spendingRequests[0]
+    if (spending) {
+      return {
+        kind: 'spending',
+        originator: spending.originator,
+        categories: ['spending']
+      }
+    }
+
+    return null
+  }, [])
 
   useEffect(() => {
     const wallet = managers?.walletManager;
@@ -1454,7 +1548,30 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
       try {
         const interceptorWallet = new RequestInterceptorWallet(wallet, encodedProfileId, updateRecentAppWrapper);
-        const unlisten = await onWalletReady(interceptorWallet);
+        const inspector: WalletBridgeInspector = {
+          getPermissionBaseline: async (originator: string) => {
+            const permissionsManager = managers.permissionsManager
+            if (!permissionsManager) {
+              throw new Error('Permissions manager is not ready')
+            }
+
+            const [protocols, baskets, certificates, spending] = await Promise.all([
+              permissionsManager.listProtocolPermissions({ originator }),
+              permissionsManager.listBasketAccess({ originator }),
+              permissionsManager.listCertificateAccess({ originator }),
+              permissionsManager.listSpendingAuthorizations({ originator })
+            ])
+
+            return {
+              protocols: protocols.length,
+              baskets: baskets.length,
+              certificates: certificates.length,
+              spending: spending.length
+            }
+          },
+          getActivePromptSummary
+        }
+        const unlisten = await onWalletReady(interceptorWallet, inspector);
 
         if (disposed) {
           if (unlisten) {
@@ -1478,7 +1595,14 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         walletListenerRef.current = undefined;
       }
     };
-  }, [managers?.walletManager, managers?.walletManager?.authenticated, activeProfile?.id, onWalletReady])
+  }, [
+    managers?.walletManager,
+    managers?.walletManager?.authenticated,
+    managers.permissionsManager,
+    activeProfile?.id,
+    getActivePromptSummary,
+    onWalletReady
+  ])
 
   useEffect(() => {
     if (typeof managers.walletManager === 'object') {
@@ -1579,13 +1703,6 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     })
   }
 
-  const walletQaStateRef = useRef({
-    basketRequests,
-    certificateRequests,
-    protocolRequests,
-    spendingRequests
-  })
-
   const walletQaActionsRef = useRef({
     permissionsManager: managers.permissionsManager,
     advanceBasketQueue,
@@ -1593,15 +1710,6 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     advanceProtocolQueue,
     advanceSpendingQueue
   })
-
-  useEffect(() => {
-    walletQaStateRef.current = {
-      basketRequests,
-      certificateRequests,
-      protocolRequests,
-      spendingRequests
-    }
-  }, [basketRequests, certificateRequests, protocolRequests, spendingRequests])
 
   useEffect(() => {
     walletQaActionsRef.current = {

@@ -8,6 +8,7 @@
     "dev-ui": "vite --config vite.config.dev-ui.ts",
     "build": "tsc && vite build",
     "test": "vitest run",
+    "test:security": "node scripts/assert-wallet-security-gates.mjs",
     "qa:bridge": "node scripts/wallet-bridge-qa.mjs",
     "qa:bridge:prompt": "node scripts/wallet-bridge-qa.mjs --prompt-ui",
     "qa:bridge:prompt-qa": "node scripts/wallet-bridge-qa.mjs --prompt-qa",

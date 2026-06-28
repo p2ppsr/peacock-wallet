@@ -51,6 +51,11 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
 
   const pendingNavigationFrame = useRef<number | null>(null)
   const pendingNavigationPath = useRef<string | null>(null)
+  const proofRunAttrs = (testId: string, ariaLabel: string) => ({
+    'aria-label': ariaLabel,
+    'data-testid': testId,
+    'data-proofrun': testId
+  })
 
   // History.push wrapper
   useEffect(() => {
@@ -186,6 +191,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             onClick={() => navigation.push('/dashboard/home')}
             selected={isHomeSelected}
             sx={menuItemStyle(isHomeSelected)}
+            {...proofRunAttrs('wallet-nav-home', 'Home')}
           >
             <ListItemIcon sx={{ minWidth: 40, color: isHomeSelected ? 'primary.main' : 'inherit' }}>
               <HomeIcon />
@@ -206,6 +212,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             onClick={() => navigation.push('/dashboard/identity')}
             selected={location.pathname === '/dashboard/identity'}
             sx={menuItemStyle(location.pathname === '/dashboard/identity')}
+            {...proofRunAttrs('wallet-nav-identity', 'Identity')}
           >
             <ListItemIcon sx={{ minWidth: 40, color: location.pathname === '/dashboard/identity' ? 'primary.main' : 'inherit' }}>
               <IdentityIcon />
@@ -226,6 +233,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             onClick={() => navigation.push('/dashboard/trust')}
             selected={location.pathname === '/dashboard/trust'}
             sx={menuItemStyle(location.pathname === '/dashboard/trust')}
+            {...proofRunAttrs('wallet-nav-trust', 'Trust')}
           >
             <ListItemIcon sx={{ minWidth: 40, color: location.pathname === '/dashboard/trust' ? 'primary.main' : 'inherit' }}>
               <VerifiedUserIcon />
@@ -246,6 +254,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             onClick={() => navigation.push('/dashboard/payments')}
             selected={isPaymentsSelected}
             sx={menuItemStyle(isPaymentsSelected)}
+            {...proofRunAttrs('wallet-nav-payments', 'Payments')}
           >
             <ListItemIcon sx={{ minWidth: 40, color: isPaymentsSelected ? 'primary.main' : 'inherit' }}>
               <PaymentIcon />
@@ -266,6 +275,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
             onClick={() => navigation.push('/dashboard/settings')}
             selected={location.pathname === '/dashboard/settings'}
             sx={menuItemStyle(location.pathname === '/dashboard/settings')}
+            {...proofRunAttrs('wallet-nav-settings', 'Settings')}
           >
             <ListItemIcon sx={{ minWidth: 40, color: location.pathname === '/dashboard/settings' ? 'primary.main' : 'inherit' }}>
               <SettingsIcon />

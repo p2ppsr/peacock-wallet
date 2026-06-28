@@ -46,12 +46,15 @@ type SectionMenuProps = {
   primaryAction?: {
     label: string;
     onClick: () => void;
+    testId?: string;
   };
   onRevokeEverything?: () => void;
   disabled?: boolean;
+  ariaLabel: string;
+  testId: string;
 };
 
-const SectionMenu = ({ primaryAction, onRevokeEverything, disabled }: SectionMenuProps) => {
+const SectionMenu = ({ primaryAction, onRevokeEverything, disabled, ariaLabel, testId }: SectionMenuProps) => {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
@@ -61,6 +64,9 @@ const SectionMenu = ({ primaryAction, onRevokeEverything, disabled }: SectionMen
         size="small"
         onClick={(e) => setAnchorEl(e.currentTarget)}
         disabled={!!disabled}
+        aria-label={ariaLabel}
+        data-testid={testId}
+        data-proofrun={testId}
       >
         <MoreVertIcon fontSize="small" />
       </IconButton>
@@ -78,6 +84,8 @@ const SectionMenu = ({ primaryAction, onRevokeEverything, disabled }: SectionMen
               primaryAction.onClick();
             }}
             disabled={!!disabled}
+            data-testid={primaryAction.testId ?? `${testId}-primary`}
+            data-proofrun={primaryAction.testId ?? `${testId}-primary`}
           >
             <ListItemIcon>
               <DeleteOutlineIcon fontSize="small" />
@@ -94,6 +102,8 @@ const SectionMenu = ({ primaryAction, onRevokeEverything, disabled }: SectionMen
             }}
             disabled={!!disabled}
             sx={{ color: 'error.main' }}
+            data-testid={`${testId}-revoke-everything`}
+            data-proofrun={`${testId}-revoke-everything`}
           >
             <ListItemIcon sx={{ color: 'error.main' }}>
               <DeleteForeverIcon fontSize="small" />
@@ -373,8 +383,23 @@ const AppAccess = () => {
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRevokeDialogOpen(false)} disabled={revokeBusy}>Cancel</Button>
-          <Button onClick={confirmRevoke} color="error" disabled={revokeBusy}>Revoke</Button>
+          <Button
+            onClick={() => setRevokeDialogOpen(false)}
+            disabled={revokeBusy}
+            data-testid="app-access-revoke-cancel"
+            data-proofrun="app-access-revoke-cancel"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmRevoke}
+            color="error"
+            disabled={revokeBusy}
+            data-testid="app-access-revoke-confirm"
+            data-proofrun="app-access-revoke-confirm"
+          >
+            Revoke
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -390,6 +415,9 @@ const AppAccess = () => {
               onClick={() => handleCopy(appUrl)}
               disabled={!!copied.url}
               sx={{ ml: 0.5 }}
+              aria-label="Copy app URL"
+              data-testid="app-access-copy-url"
+              data-proofrun="app-access-copy-url"
             >
               {copied.url ? <CheckIcon fontSize="small" /> : <ContentCopyIcon fontSize="small" />}
             </IconButton>
@@ -424,6 +452,8 @@ const AppAccess = () => {
         <SectionMenu
           onRevokeEverything={() => openRevokeDialog('everything')}
           disabled={revokeBusy}
+          ariaLabel="Permission actions for this app"
+          testId="app-access-permission-actions"
         />
       </Box>
 
@@ -437,9 +467,12 @@ const AppAccess = () => {
                 <SectionMenu
                   primaryAction={{
                     label: 'Revoke All Protocol Permissions',
-                    onClick: () => openRevokeDialog('protocol')
+                    onClick: () => openRevokeDialog('protocol'),
+                    testId: 'app-access-revoke-all-protocols'
                   }}
                   disabled={revokeBusy}
+                  ariaLabel="Protocol permission actions"
+                  testId="app-access-protocol-actions"
                 />
               }
             >
@@ -459,9 +492,12 @@ const AppAccess = () => {
                 <SectionMenu
                   primaryAction={{
                     label: 'Revoke All Basket Access',
-                    onClick: () => openRevokeDialog('basket')
+                    onClick: () => openRevokeDialog('basket'),
+                    testId: 'app-access-revoke-all-baskets'
                   }}
                   disabled={revokeBusy}
+                  ariaLabel="Basket access actions"
+                  testId="app-access-basket-actions"
                 />
               }
             >
@@ -489,9 +525,12 @@ const AppAccess = () => {
                 <SectionMenu
                   primaryAction={{
                     label: 'Revoke All Certificate Access',
-                    onClick: () => openRevokeDialog('certificate')
+                    onClick: () => openRevokeDialog('certificate'),
+                    testId: 'app-access-revoke-all-certificates'
                   }}
                   disabled={revokeBusy}
+                  ariaLabel="Certificate access actions"
+                  testId="app-access-certificate-actions"
                 />
               }
             >
@@ -515,9 +554,12 @@ const AppAccess = () => {
               <SectionMenu
                 primaryAction={{
                   label: 'Revoke All Protocol Permissions',
-                  onClick: () => openRevokeDialog('protocol')
+                  onClick: () => openRevokeDialog('protocol'),
+                  testId: 'app-access-revoke-all-protocols'
                 }}
                 disabled={revokeBusy}
+                ariaLabel="Protocol permission actions"
+                testId="app-access-protocol-actions"
               />
             }
           >
@@ -544,9 +586,12 @@ const AppAccess = () => {
               <SectionMenu
                 primaryAction={{
                   label: 'Revoke All Basket Access',
-                  onClick: () => openRevokeDialog('basket')
+                  onClick: () => openRevokeDialog('basket'),
+                  testId: 'app-access-revoke-all-baskets'
                 }}
                 disabled={revokeBusy}
+                ariaLabel="Basket access actions"
+                testId="app-access-basket-actions"
               />
             }
           >
@@ -565,9 +610,12 @@ const AppAccess = () => {
               <SectionMenu
                 primaryAction={{
                   label: 'Revoke All Certificate Access',
-                  onClick: () => openRevokeDialog('certificate')
+                  onClick: () => openRevokeDialog('certificate'),
+                  testId: 'app-access-revoke-all-certificates'
                 }}
                 disabled={revokeBusy}
+                ariaLabel="Certificate access actions"
+                testId="app-access-certificate-actions"
               />
             }
           >

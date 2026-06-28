@@ -1,11 +1,18 @@
 export const WALLET_BRC100_VERSION = 'wallet-brc100-1.0.0'
 export const WALLET_NOT_AUTHENTICATED = 'WALLET_NOT_AUTHENTICATED'
-export const ORIGIN_REQUIRED = 'ORIGIN_REQUIRED'
-export const INVALID_ORIGIN = 'INVALID_ORIGIN'
+export { INVALID_ORIGIN, ORIGIN_REQUIRED, RESERVED_ORIGIN } from './walletBridgeOrigin'
 export const INVALID_REQUEST = 'INVALID_REQUEST'
 export const UNKNOWN_WALLET_PATH = 'UNKNOWN_WALLET_PATH'
-
-type NormalizedHeaders = Record<string, string>
+export {
+  normalizeBridgeHeaders,
+  parseBridgeOrigin
+} from './walletBridgeOrigin'
+import {
+  RESERVED_ORIGIN,
+  WalletBridgeOriginError,
+  normalizeBridgeHeaders,
+  parseBridgeOrigin
+} from './walletBridgeOrigin'
 
 export type PreLoginWalletRequest = {
   path?: unknown
@@ -57,42 +64,6 @@ export function normalizeBridgePath(path: unknown): string {
   return path.split('?')[0] || '/'
 }
 
-export function normalizeBridgeHeaders(headers: unknown): NormalizedHeaders {
-  const normalized: NormalizedHeaders = {}
-
-  if (Array.isArray(headers)) {
-    for (const entry of headers) {
-      if (Array.isArray(entry) && entry.length >= 2) {
-        normalized[String(entry[0]).toLowerCase()] = String(entry[1])
-      }
-    }
-    return normalized
-  }
-
-  if (headers && typeof headers === 'object') {
-    for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
-      normalized[key.toLowerCase()] = String(value)
-    }
-  }
-
-  return normalized
-}
-
-export function parseBridgeOrigin(headers: NormalizedHeaders): string {
-  const rawOrigin = headers.origin
-  if (rawOrigin) {
-    return new URL(rawOrigin).host.toLowerCase()
-  }
-
-  const rawOriginator = headers.originator
-  if (rawOriginator) {
-    const candidate = rawOriginator.includes('://') ? rawOriginator : `http://${rawOriginator}`
-    return new URL(candidate).host.toLowerCase()
-  }
-
-  throw new Error(ORIGIN_REQUIRED)
-}
-
 function parseRequestId(value: unknown): number {
   const requestId = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(requestId)) {
@@ -131,13 +102,17 @@ export function buildPreLoginWalletResponse(req: PreLoginWalletRequest): PreLogi
   try {
     parseBridgeOrigin(normalizeBridgeHeaders(req.headers))
   } catch (error) {
-    const code = error instanceof Error && error.message === ORIGIN_REQUIRED
-      ? ORIGIN_REQUIRED
-      : INVALID_ORIGIN
+    const code = error instanceof WalletBridgeOriginError
+      ? error.code
+      : 'INVALID_ORIGIN'
     return {
       request_id: requestId,
-      status: 400,
-      body: jsonBody(errorBody(code, code === ORIGIN_REQUIRED ? 'Origin header is required' : 'Invalid Origin header', false))
+      status: code === RESERVED_ORIGIN ? 403 : 400,
+      body: jsonBody(errorBody(
+        code,
+        error instanceof Error ? error.message : 'Invalid Origin header',
+        false
+      ))
     }
   }
 

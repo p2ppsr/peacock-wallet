@@ -173,6 +173,9 @@ const SpendingAuthorizationHandler: React.FC = () => {
                   <Button
                     size="small"
                     onClick={() => setShowLineItems(!showLineItems)}
+                    aria-label={showLineItems ? 'Hide spending details' : 'Show spending details'}
+                    data-testid="spending-prompt-toggle-details"
+                    data-proofrun="spending-prompt-toggle-details"
                     sx={{
                       fontSize: '0.75rem',
                       textTransform: 'none',
@@ -281,6 +284,9 @@ const SpendingAuthorizationHandler: React.FC = () => {
             variant="text"
             color="inherit"
             onClick={handleCancel}
+            aria-label="Deny spending request"
+            data-testid="spending-prompt-deny"
+            data-proofrun="spending-prompt-deny"
             sx={{
               height: '40px'
             }}
@@ -294,6 +300,9 @@ const SpendingAuthorizationHandler: React.FC = () => {
               variant="contained"
               color="primary"
               onClick={() => handleGrant({ singular: false, amount: currentPerm.authorizationAmount })}
+              aria-label="Approve spending limit increase"
+              data-testid="spending-prompt-approve-increase"
+              data-proofrun="spending-prompt-approve-increase"
               sx={{
                 minWidth: '120px',
                 height: '40px'
@@ -307,6 +316,9 @@ const SpendingAuthorizationHandler: React.FC = () => {
               variant="contained"
               color="primary"
               onClick={() => handleGrant({ singular: false, amount: currentPerm.authorizationAmount })}
+              aria-label="Set spending limit"
+              data-testid="spending-prompt-set-limit"
+              data-proofrun="spending-prompt-set-limit"
               sx={{
                 minWidth: '120px',
                 height: '40px'
@@ -326,6 +338,9 @@ const SpendingAuthorizationHandler: React.FC = () => {
                   variant="outlined"
                   color="warning"
                   onClick={() => handleGrant({ singular: false, amount: determineUpgradeAmount(currentPerm.amountPreviouslyAuthorized) })}
+                  aria-label="Allow future spending up to this limit"
+                  data-testid="spending-prompt-allow-up-to"
+                  data-proofrun="spending-prompt-allow-up-to"
                   sx={{
                     minWidth: '120px',
                     height: '40px',
@@ -341,6 +356,9 @@ const SpendingAuthorizationHandler: React.FC = () => {
                   variant="contained"
                   color="success"
                   onClick={() => handleGrant({ singular: true })}
+                  aria-label="Approve this spend"
+                  data-testid="spending-prompt-spend"
+                  data-proofrun="spending-prompt-spend"
                   sx={{
                     height: '40px'
                   }}

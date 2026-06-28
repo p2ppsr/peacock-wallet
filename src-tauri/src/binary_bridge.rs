@@ -33,6 +33,7 @@ use tauri::{
 };
 use tokio::sync::oneshot;
 
+use crate::origin::{parse_bridge_origin, OriginError};
 use crate::priority::elevate_current_thread_priority;
 
 type Pending = DashMap<u64, oneshot::Sender<(u16, Vec<u8>)>>;
@@ -106,6 +107,18 @@ fn plain(status: StatusCode, msg: &'static str) -> Response<Body> {
     res
 }
 
+fn origin_error_response(err: OriginError) -> Response<Body> {
+    match err {
+        OriginError::Required => plain(StatusCode::BAD_REQUEST, "Origin header is required"),
+        OriginError::Invalid => plain(StatusCode::BAD_REQUEST, "Invalid Origin header"),
+        OriginError::TooLong => plain(StatusCode::BAD_REQUEST, "Origin too long"),
+        OriginError::Reserved => plain(
+            StatusCode::FORBIDDEN,
+            "Reserved wallet originator cannot be used by external applications",
+        ),
+    }
+}
+
 async fn handle(
     req: Request<Body>,
     state: Arc<BinaryBridgeState>,
@@ -134,17 +147,10 @@ async fn handle(
         None => return Ok(plain(StatusCode::NOT_FOUND, "Unknown call")),
     };
 
-    let origin = req
-        .headers()
-        .get("origin")
-        .or_else(|| req.headers().get("originator"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_string();
-
-    if origin.len() > 255 {
-        return Ok(plain(StatusCode::BAD_REQUEST, "Origin too long"));
-    }
+    let origin = match parse_bridge_origin(req.headers()) {
+        Ok(origin) => origin,
+        Err(err) => return Ok(origin_error_response(err)),
+    };
 
     let body = match hyper::body::to_bytes(req.into_body()).await {
         Ok(b) => b,

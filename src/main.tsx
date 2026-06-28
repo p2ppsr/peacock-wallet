@@ -3,6 +3,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import UserInterface from './UserInterface'
 import { onWalletReady } from './onWalletReady'
+import type { WalletBridgeInspector } from './onWalletReady'
 import ErrorBoundary from './ErrorBoundary'
 import { tauriFunctions } from './tauriFunctions'
 import packageJson from '../package.json'
@@ -31,7 +32,7 @@ if (rootElement) {
       <ThemeProvider theme={theme}>
         <ErrorBoundary>
           <UserInterface
-            onWalletReady={async (wallet) => {
+            onWalletReady={async (wallet, inspector?: WalletBridgeInspector) => {
               try {
                 const unlisten = await preLoginUnlistenPromise
                 if (typeof unlisten === 'function') {
@@ -40,7 +41,7 @@ if (rootElement) {
               } catch (e) {
                 console.warn('Failed to unlisten pre-login routes:', e)
               }
-              return onWalletReady(wallet)
+              return onWalletReady(wallet, inspector)
             }}
             nativeHandlers={tauriFunctions}
             appVersion={packageJson.version}

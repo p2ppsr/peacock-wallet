@@ -69,6 +69,7 @@ struct TrayHolder {
 }
 
 mod binary_bridge;
+mod origin;
 mod priority;
 mod tls;
 use binary_bridge::BinaryBridgeState;

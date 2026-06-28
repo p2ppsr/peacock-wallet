@@ -470,6 +470,11 @@ const GroupPermissionHandler = () => {
                 <Checkbox
                   checked={spendingEnabled}
                   onChange={(e) => setSpendingEnabled(e.target.checked)}
+                  inputProps={{
+                    'aria-label': 'Enable grouped spending authorization'
+                  }}
+                  data-testid="group-permission-spending-enabled"
+                  data-proofrun="group-permission-spending-enabled"
                 />
               }
               label='Enable automatic spending'
@@ -493,7 +498,13 @@ const GroupPermissionHandler = () => {
                     setSpendingAmountSats(Number.isFinite(sats) ? sats : null)
                   }}
                   fullWidth
-                  inputProps={{ min: 0, step: inputStep }}
+                  inputProps={{
+                    min: 0,
+                    step: inputStep,
+                    'aria-label': 'Grouped spending maximum'
+                  }}
+                  data-testid="group-permission-spending-amount"
+                  data-proofrun="group-permission-spending-amount"
                   InputProps={{
                     startAdornment: <InputAdornment position="start">{adornmentLabel}</InputAdornment>
                   }}
@@ -519,6 +530,9 @@ const GroupPermissionHandler = () => {
           onClick={() => setShowDetails(s => !s)}
           variant='text'
           size='small'
+          aria-label={showDetails ? 'Hide grouped permission details' : 'Show grouped permission details'}
+          data-testid="group-permission-toggle-details"
+          data-proofrun="group-permission-toggle-details"
         >
           {showDetails ? 'Hide details' : 'Show details'}
         </Button>
@@ -536,6 +550,11 @@ const GroupPermissionHandler = () => {
                       control={
                         <Checkbox
                           checked={checkedProtocolKeys.has(protocolKey(x))}
+                          inputProps={{
+                            'aria-label': `Include protocol permission ${x.protocolID?.[1] ?? i + 1}`
+                          }}
+                          data-testid={`group-permission-protocol-${i}`}
+                          data-proofrun={`group-permission-protocol-${i}`}
                           onChange={(e) => {
                             const key = protocolKey(x)
                             setCheckedProtocolKeys(prev => {
@@ -584,6 +603,11 @@ const GroupPermissionHandler = () => {
                       control={
                         <Checkbox
                           checked={checkedCertificateKeys.has(certificateKey(x))}
+                          inputProps={{
+                            'aria-label': `Include certificate access ${x.type ?? i + 1}`
+                          }}
+                          data-testid={`group-permission-certificate-${i}`}
+                          data-proofrun={`group-permission-certificate-${i}`}
                           onChange={(e) => {
                             const key = certificateKey(x)
                             setCheckedCertificateKeys(prev => {
@@ -627,6 +651,11 @@ const GroupPermissionHandler = () => {
                       control={
                         <Checkbox
                           checked={checkedBasketKeys.has(basketKey(x))}
+                          inputProps={{
+                            'aria-label': `Include basket access ${x.basket ?? i + 1}`
+                          }}
+                          data-testid={`group-permission-basket-${i}`}
+                          data-proofrun={`group-permission-basket-${i}`}
                           onChange={(e) => {
                             const key = basketKey(x)
                             setCheckedBasketKeys(prev => {
@@ -668,6 +697,9 @@ const GroupPermissionHandler = () => {
           variant='outlined'
           disabled={isGranting}
           size='large'
+          aria-label={isPeerGroupedRequest ? 'Deny peer trust request' : 'Deny grouped app permission request'}
+          data-testid="group-permission-deny"
+          data-proofrun="group-permission-deny"
         >
           Deny
         </Button>
@@ -678,6 +710,9 @@ const GroupPermissionHandler = () => {
           disabled={isGranting}
           startIcon={isGranting ? <CircularProgress size={16} color='inherit' /> : undefined}
           size='large'
+          aria-label={isPeerGroupedRequest ? 'Trust peer' : 'Allow grouped app permissions'}
+          data-testid="group-permission-allow"
+          data-proofrun="group-permission-allow"
         >
           {isGranting ? 'Granting...' : isPeerGroupedRequest ? 'Trust Peer' : 'Allow Access'}
         </Button>
