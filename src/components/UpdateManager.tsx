@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { check } from '@tauri-apps/plugin-updater';
+import { check, type DownloadEvent } from '@tauri-apps/plugin-updater';
 import {
   Dialog,
   DialogTitle,
@@ -14,6 +14,7 @@ import {
 } from '@mui/material';
 import { Download as DownloadIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
+import { createDownloadProgressTracker, type DownloadProgressPercent } from './updateProgress';
 
 interface UpdateManagerProps {
   checkOnMount?: boolean;
@@ -27,7 +28,7 @@ const UpdateManager: React.FC<UpdateManagerProps> = ({
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
   const [downloading, setDownloading] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [downloadProgress, setDownloadProgress] = useState<DownloadProgressPercent>(0);
   const [showDialog, setShowDialog] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,22 +92,11 @@ const UpdateManager: React.FC<UpdateManagerProps> = ({
       setDownloading(true);
       setDownloadProgress(0);
       setError(null);
+      const trackDownloadProgress = createDownloadProgressTracker();
       
       // Download with progress tracking
-      await updateInfo.downloadAndInstall((event: any) => {
-        switch (event.event) {
-          case 'Started':
-            setDownloadProgress(0);
-            break;
-          case 'Progress': {
-            const progress = Math.round((event.data.chunkLength / event.data.contentLength) * 100);
-            setDownloadProgress(progress);
-            break;
-          }
-          case 'Finished':
-            setDownloadProgress(100);
-            break;
-        }
+      await updateInfo.downloadAndInstall((event: DownloadEvent) => {
+        setDownloadProgress(trackDownloadProgress(event));
       });
 
       
@@ -217,11 +207,11 @@ const UpdateManager: React.FC<UpdateManagerProps> = ({
           {downloading && (
             <Box sx={{ mt: 2 }}>
               <Typography variant="body2" gutterBottom>
-                Downloading update... {downloadProgress}%
+                Downloading update{downloadProgress === null ? '...' : `... ${downloadProgress}%`}
               </Typography>
-              <LinearProgress 
-                variant="determinate" 
-                value={downloadProgress} 
+              <LinearProgress
+                variant={downloadProgress === null ? 'indeterminate' : 'determinate'}
+                value={downloadProgress ?? undefined}
                 sx={{ mb: 1 }}
               />
             </Box>
