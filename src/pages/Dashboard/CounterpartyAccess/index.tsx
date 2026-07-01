@@ -39,7 +39,7 @@ const CounterpartyAccess = () => {
   const createFallbackIdentity = (): DisplayableIdentity => ({
     identityKey: counterparty,
     abbreviatedKey: counterparty,
-    name: `Counterparty ${counterparty.slice(0, 6)}…`,
+    name: 'Unverified counterparty',
     avatarURL: undefined,
     badgeIconURL: '',
     badgeLabel: 'Unverified',
@@ -102,7 +102,7 @@ const CounterpartyAccess = () => {
   return (
     <Stack spacing={3} sx={{ p: 2 }}>
       <PageHeader
-        title={identity.name || `Counterparty ${counterparty.slice(0, 6)}…`}
+        title={identity.name || 'Unverified counterparty'}
         subheading={
           <Stack direction="row" spacing={1} alignItems="center">
             <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>

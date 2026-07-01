@@ -118,7 +118,7 @@ const BasketAccess = () => {
         if (locationState?.id === basketId) {
           setDetails({
             id: basketId,
-            name: locationState.name ?? `Basket ${basketId.slice(0, 6)}…`,
+            name: locationState.name ?? 'Unregistered basket',
             description: locationState.description ?? 'No description available yet.',
             documentationURL: locationState.documentationURL,
             iconURL: locationState.iconURL,
@@ -127,7 +127,7 @@ const BasketAccess = () => {
           const trusted = selectMostTrusted(registryResults, settings.trustSettings.trustedCertifiers);
           setDetails({
             id: basketId,
-            name: trusted?.name ?? `Basket ${basketId.slice(0, 6)}…`,
+            name: trusted?.name ?? 'Unregistered basket',
             description: trusted?.description ?? 'No description available yet.',
             documentationURL: trusted?.documentationURL,
             iconURL: trusted?.iconURL,
@@ -139,7 +139,7 @@ const BasketAccess = () => {
         setError(err.message ?? 'Failed to load basket details.');
         setDetails({
           id: basketId,
-          name: `Basket ${basketId.slice(0, 6)}…`,
+          name: 'Unregistered basket',
           description: 'No description is available for this basket.',
         });
       } finally {

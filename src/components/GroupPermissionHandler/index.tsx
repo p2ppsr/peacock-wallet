@@ -22,6 +22,7 @@ import { WalletContext, WalletContextValue } from '../../WalletContext'
 import { UserContext, UserContextValue } from '../../UserContext'
 import AppChip from '../AppChip'
 import ProtoChip from '../ProtoChip'
+import CertificateChip from '../CertificateChip'
 import BasketChip from '../BasketChip'
 import CounterpartyChip from '../CounterpartyChip'
 import AmountDisplay from '../AmountDisplay'
@@ -124,13 +125,6 @@ const GroupPermissionHandler = () => {
     if (!isPeerGroupedRequest) return null
     return protocolPermissions[0]?.counterparty ?? 'self'
   }, [isPeerGroupedRequest, protocolPermissions])
-
-  const peerCounterpartyDisplay = useMemo(() => {
-    if (!peerCounterparty) return null
-    if (peerCounterparty === 'self' || peerCounterparty === 'anyone') return peerCounterparty
-    if (peerCounterparty.length <= 16) return peerCounterparty
-    return `${peerCounterparty.slice(0, 8)}…${peerCounterparty.slice(-8)}`
-  }, [peerCounterparty])
 
   const protocolKey = (p: ProtocolPermission) => {
     const sec = p.protocolID?.[0] ?? 0
@@ -382,7 +376,7 @@ const GroupPermissionHandler = () => {
   // Helper to generate permission summary text
   const getPermissionSummary = () => {
     const items: ReactNode[] = []
-    if (isPeerGroupedRequest && peerCounterpartyDisplay) items.push(`Trust peer ${peerCounterpartyDisplay}`)
+    if (isPeerGroupedRequest && peerCounterparty) items.push('Trust the counterparty shown above')
     if (protocolPermissions.length > 0) items.push('Use your wallet identity to sign and encrypt data')
     if (basketAccess.length > 0) items.push('Store and access data in your wallet')
     if (certificateAccess.length > 0) items.push('View your identity credentials')
@@ -399,8 +393,8 @@ const GroupPermissionHandler = () => {
   // Generate app-specific context message
   const getContextMessage = () => {
     const appName = originator || 'This app'
-    if (isPeerGroupedRequest && peerCounterpartyDisplay) {
-      return `${appName} wants you to trust a specific counterparty (${peerCounterpartyDisplay}) for the permissions below.`
+    if (isPeerGroupedRequest && peerCounterparty) {
+      return `${appName} wants you to trust the counterparty shown above for the permissions below.`
     }
     return `${appName} wants to use your wallet to manage identity, data, and transactions.`
   }
@@ -423,7 +417,7 @@ const GroupPermissionHandler = () => {
               clickable={false}
             />
           )}
-          {isPeerGroupedRequest && peerCounterpartyDisplay && (
+          {isPeerGroupedRequest && peerCounterparty && (
             <Box sx={{ mt: 1 }}>
               <Typography variant='caption' color='text.secondary'>
                 Counterparty
@@ -621,9 +615,12 @@ const GroupPermissionHandler = () => {
                       }
                       label={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          <Typography variant='body2' sx={{ fontWeight: 600 }}>
-                            {x.type}
-                          </Typography>
+                          <CertificateChip
+                            certType={x.type}
+                            certVerifier={x.verifierPublicKey}
+                            clickable={false}
+                            canRevoke={false}
+                          />
                           {x.verifierPublicKey && (
                             <CounterpartyChip counterparty={x.verifierPublicKey} clickable={false} size={1.0} layout="compact" />
                           )}

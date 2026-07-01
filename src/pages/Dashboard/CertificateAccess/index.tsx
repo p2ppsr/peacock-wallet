@@ -72,7 +72,7 @@ const CertificateAccess = () => {
 
         if (!results.length) {
           setDefinition({
-            name: certType,
+            name: 'Unregistered certificate type',
             description: 'This certificate type has not been published by any trusted certifier yet.',
             fields: {},
           });
@@ -82,7 +82,7 @@ const CertificateAccess = () => {
         const trusted = selectMostTrusted(results, settings.trustSettings.trustedCertifiers);
 
         setDefinition({
-          name: trusted?.name ?? certType,
+          name: trusted?.name ?? 'Unregistered certificate type',
           description: trusted?.description ?? 'No description is available for this certificate type.',
           documentationURL: trusted?.documentationURL,
           iconURL: trusted?.iconURL,
@@ -93,7 +93,7 @@ const CertificateAccess = () => {
         console.error(err);
         setError(err.message ?? 'Failed to load certificate details.');
         setDefinition({
-          name: certType,
+          name: 'Unregistered certificate type',
           description: 'No description is available for this certificate type.',
           fields: {},
         });
