@@ -36,12 +36,26 @@ use tokio::sync::oneshot;
 use crate::origin::{parse_bridge_origin, OriginError};
 use crate::priority::elevate_current_thread_priority;
 
-type Pending = DashMap<u64, oneshot::Sender<(u16, Vec<u8>)>>;
+struct PendingRequest {
+    generation: String,
+    sender: oneshot::Sender<(u16, Vec<u8>)>,
+}
+
+struct BinaryHandler {
+    generation: String,
+    channel: Channel<InvokeResponseBody>,
+}
+
+type Pending = DashMap<u64, PendingRequest>;
+
+fn clear_pending_generation(pending: &Pending, generation: &str) {
+    pending.retain(|_, request| request.generation != generation);
+}
 
 pub struct BinaryBridgeState {
     pending: Arc<Pending>,
     counter: Arc<AtomicU64>,
-    handler: Mutex<Option<Channel<InvokeResponseBody>>>,
+    handler: Mutex<Option<BinaryHandler>>,
 }
 
 impl BinaryBridgeState {
@@ -57,9 +71,18 @@ impl BinaryBridgeState {
 fn apply_cors(res: &mut Response<Body>) {
     let h = res.headers_mut();
     h.insert("Access-Control-Allow-Origin", HeaderValue::from_static("*"));
-    h.insert("Access-Control-Allow-Headers", HeaderValue::from_static("*"));
-    h.insert("Access-Control-Allow-Methods", HeaderValue::from_static("*"));
-    h.insert("Access-Control-Expose-Headers", HeaderValue::from_static("*"));
+    h.insert(
+        "Access-Control-Allow-Headers",
+        HeaderValue::from_static("*"),
+    );
+    h.insert(
+        "Access-Control-Allow-Methods",
+        HeaderValue::from_static("*"),
+    );
+    h.insert(
+        "Access-Control-Expose-Headers",
+        HeaderValue::from_static("*"),
+    );
     h.insert(
         "Access-Control-Allow-Private-Network",
         HeaderValue::from_static("true"),
@@ -168,18 +191,25 @@ async fn handle(
     frame.extend_from_slice(&body);
 
     let (tx, rx) = oneshot::channel::<(u16, Vec<u8>)>();
-    state.pending.insert(request_id, tx);
 
     let send_result = {
         let guard = state.handler.lock().unwrap();
         match guard.as_ref() {
-            Some(ch) => ch.send(InvokeResponseBody::Raw(frame)),
+            Some(handler) => {
+                state.pending.insert(
+                    request_id,
+                    PendingRequest {
+                        generation: handler.generation.clone(),
+                        sender: tx,
+                    },
+                );
+                handler.channel.send(InvokeResponseBody::Raw(frame))
+            }
             None => {
-                state.pending.remove(&request_id);
                 return Ok(plain(
                     StatusCode::SERVICE_UNAVAILABLE,
                     "Binary bridge not ready",
-                ));
+                ))
             }
         }
     };
@@ -261,19 +291,74 @@ pub fn spawn(app: &AppHandle) {
 #[tauri::command]
 pub fn register_binary_handler(
     state: tauri::State<'_, Arc<BinaryBridgeState>>,
+    generation: String,
     channel: Channel<InvokeResponseBody>,
 ) {
-    let mut guard = state.handler.lock().unwrap();
-    *guard = Some(channel);
+    let previous_generation = {
+        let mut guard = state.handler.lock().unwrap();
+        guard
+            .replace(BinaryHandler {
+                generation,
+                channel,
+            })
+            .map(|handler| handler.generation)
+    };
+
+    if let Some(previous_generation) = previous_generation {
+        clear_pending_generation(&state.pending, &previous_generation);
+    }
 }
 
 #[tauri::command]
-pub fn clear_binary_handler(state: tauri::State<'_, Arc<BinaryBridgeState>>) {
-    {
+pub fn clear_binary_handler(state: tauri::State<'_, Arc<BinaryBridgeState>>, generation: String) {
+    let cleared = {
         let mut guard = state.handler.lock().unwrap();
-        *guard = None;
+        if guard
+            .as_ref()
+            .is_some_and(|handler| handler.generation == generation)
+        {
+            *guard = None;
+            true
+        } else {
+            false
+        }
+    };
+
+    if cleared {
+        clear_pending_generation(&state.pending, &generation);
     }
-    state.pending.clear();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stale_generation_cleanup_preserves_current_requests() {
+        let pending = Pending::new();
+        let (old_sender, _old_receiver) = oneshot::channel();
+        let (current_sender, _current_receiver) = oneshot::channel();
+
+        pending.insert(
+            1,
+            PendingRequest {
+                generation: "old".to_string(),
+                sender: old_sender,
+            },
+        );
+        pending.insert(
+            2,
+            PendingRequest {
+                generation: "current".to_string(),
+                sender: current_sender,
+            },
+        );
+
+        clear_pending_generation(&pending, "old");
+
+        assert!(!pending.contains_key(&1));
+        assert!(pending.contains_key(&2));
+    }
 }
 
 #[tauri::command]
@@ -301,8 +386,10 @@ pub fn respond_binary(
         }
     };
 
-    if let Some((_, tx)) = state.pending.remove(&request_id) {
-        tx.send((status, body_bytes))
+    if let Some((_, request)) = state.pending.remove(&request_id) {
+        request
+            .sender
+            .send((status, body_bytes))
             .map_err(|_| "receiver dropped".to_string())?;
         Ok(())
     } else {

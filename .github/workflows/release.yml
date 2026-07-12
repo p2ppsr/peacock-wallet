@@ -2,12 +2,54 @@ name: 'release'
 
 on:
   push:
+    branches:
+      - 'master'
     tags:
       - 'v*.*.*'
   workflow_dispatch:
 
 jobs:
+  prepare-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      should_release: ${{ steps.release.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: release
+        name: Resolve and create release tag
+        env:
+          EVENT_REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          tag="v${version}"
+          node scripts/check-release-version.js "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+          if [[ "$EVENT_REF" == refs/tags/* ]]; then
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists; this merge does not introduce a release version."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git tag -a "$tag" -m "Release $tag" "$GITHUB_SHA"
+          git push origin "$tag"
+          echo "should_release=true" >> "$GITHUB_OUTPUT"
+
   publish-tauri:
+    needs: prepare-release
+    if: needs.prepare-release.outputs.should_release == 'true'
     permissions:
       contents: write
     strategy:
@@ -440,7 +482,8 @@ jobs:
 
   package-binaries-site:
     name: package-binaries-site
-    needs: publish-tauri
+    needs: [prepare-release, publish-tauri]
+    if: needs.prepare-release.outputs.should_release == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -536,7 +579,7 @@ jobs:
 
       - name: Inject release metadata into site
         env:
-          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.tag }}
         run: |
           RELEASE_DATE="$(python3 -c "import re; from pathlib import Path; content = Path('src-tauri/app.user.wallet.metainfo.xml').read_text(); match = re.search(r'<release\\b[^>]*\\bdate=\"([^\"]+)\"', content); print(match.group(1) if match else '')")"
           if [ -z "$RELEASE_DATE" ]; then
