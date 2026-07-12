@@ -8,6 +8,10 @@ on:
       - 'v*.*.*'
   workflow_dispatch:
 
+concurrency:
+  group: wallet-release
+  cancel-in-progress: false
+
 jobs:
   prepare-release:
     runs-on: ubuntu-latest
@@ -24,6 +28,7 @@ jobs:
       - id: release
         name: Resolve and create release tag
         env:
+          EVENT_NAME: ${{ github.event_name }}
           EVENT_REF: ${{ github.ref }}
         run: |
           set -euo pipefail
@@ -32,7 +37,7 @@ jobs:
           node scripts/check-release-version.js "$tag"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-          if [[ "$EVENT_REF" == refs/tags/* ]]; then
+          if [[ "$EVENT_REF" == refs/tags/* || "$EVENT_NAME" == workflow_dispatch ]]; then
             echo "should_release=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
