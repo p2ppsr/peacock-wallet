@@ -1550,7 +1550,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         const interceptorWallet = new RequestInterceptorWallet(wallet, encodedProfileId, updateRecentAppWrapper);
         const inspector: WalletBridgeInspector = {
           getPermissionBaseline: async (originator: string) => {
-            const permissionsManager = managers.permissionsManager
+            const permissionsManager = permissionsManagerRef.current
             if (!permissionsManager) {
               throw new Error('Permissions manager is not ready')
             }
@@ -1598,7 +1598,6 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   }, [
     managers?.walletManager,
     managers?.walletManager?.authenticated,
-    managers.permissionsManager,
     activeProfile?.id,
     getActivePromptSummary,
     onWalletReady

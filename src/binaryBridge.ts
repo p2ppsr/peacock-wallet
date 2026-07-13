@@ -89,6 +89,7 @@ export const startBinaryBridge = async (
 ): Promise<() => void> => {
   detach()
   const token = ++currentToken
+  const generation = crypto.randomUUID()
   const processor = new WalletWireProcessor(wallet)
   const queue = new BinaryQueue(8, 256)
   let stopped = false
@@ -145,13 +146,13 @@ export const startBinaryBridge = async (
     }
   }
 
-  await invoke('register_binary_handler', { channel })
+  await invoke('register_binary_handler', { generation, channel })
 
   const stop = () => {
     if (stopped) return
     stopped = true
     if (token === currentToken) currentToken++
-    void invoke('clear_binary_handler').catch((err) => {
+    void invoke('clear_binary_handler', { generation }).catch((err) => {
       console.error('[binaryBridge] clear_binary_handler failed:', err)
     })
   }

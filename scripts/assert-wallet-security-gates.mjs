@@ -18,6 +18,8 @@ const origin = read('src/walletBridgeOrigin.ts')
 const rustOrigin = read('src-tauri/src/origin.rs')
 const walletContext = read('src/WalletContext.tsx')
 const onWalletReady = read('src/onWalletReady.ts')
+const binaryBridge = read('src/binaryBridge.ts')
+const rustBinaryBridge = read('src-tauri/src/binary_bridge.rs')
 const tauriMain = read('src-tauri/src/main.rs')
 
 assertNotMatches(
@@ -56,6 +58,17 @@ assertNotMatches(
   onWalletReady,
   /__wallet-inspect\/permission-baseline[\s\S]{0,1200}(grantPermission|denyPermission|revokePermission|revokeAllForOriginator)/
 )
+
+assertIncludes('live permission manager inspector', walletContext, 'const permissionsManager = permissionsManagerRef.current')
+assertNotMatches(
+  'permission manager bridge restart dependency',
+  walletContext,
+  /managers\.permissionsManager,\s*\n\s*activeProfile/
+)
+assertIncludes('binary bridge generation registration', binaryBridge, "invoke('register_binary_handler', { generation, channel })")
+assertIncludes('binary bridge generation cleanup', binaryBridge, "invoke('clear_binary_handler', { generation })")
+assertIncludes('Rust generation-scoped pending request', rustBinaryBridge, 'generation: String')
+assertIncludes('Rust generation-scoped cleanup', rustBinaryBridge, 'request.generation != generation')
 
 if (failures.length > 0) {
   console.error('UserWallet security gate check failed:')
