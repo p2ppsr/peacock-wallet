@@ -144,6 +144,39 @@ async fn proxy_fetch_manifest(url: String) -> Result<ProxyFetchResponse, String>
 
 static MAIN_WINDOW_NAME: &str = "main";
 
+fn fit_main_window_to_work_area(window: &WebviewWindow) {
+    let Ok(Some(monitor)) = window.current_monitor() else {
+        return;
+    };
+    let Ok(current_size) = window.outer_size() else {
+        return;
+    };
+    let work_area = monitor.work_area();
+
+    if current_size.width <= work_area.size.width && current_size.height <= work_area.size.height {
+        return;
+    }
+
+    let target_width = current_size
+        .width
+        .min(work_area.size.width.saturating_mul(9) / 10);
+    let target_height = current_size
+        .height
+        .min(work_area.size.height.saturating_mul(9) / 10);
+    let target_position = tauri::PhysicalPosition::new(
+        work_area.position.x + ((work_area.size.width - target_width) / 2) as i32,
+        work_area.position.y + ((work_area.size.height - target_height) / 2) as i32,
+    );
+
+    if let Err(err) = window.set_size(tauri::PhysicalSize::new(target_width, target_height)) {
+        eprintln!("Unable to fit main window to monitor work area: {}", err);
+        return;
+    }
+    if let Err(err) = window.set_position(target_position) {
+        eprintln!("Unable to center fitted main window: {}", err);
+    }
+}
+
 /// Payload sent from Rust to the frontend for each HTTP request.
 #[derive(Serialize)]
 struct HttpRequestEvent {
@@ -888,6 +921,7 @@ fn main() {
         .setup(|app| {
             // Extract the main window.
             let main_window = app.get_webview_window(MAIN_WINDOW_NAME).unwrap();
+            fit_main_window_to_work_area(&main_window);
 
             // --- Re-open window when the Dock/taskbar icon is clicked ---
             {
