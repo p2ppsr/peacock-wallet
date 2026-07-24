@@ -359,14 +359,16 @@ jobs:
             gh release upload "$release_tag" "$installer" "${installer}.sig" \
               --repo "$GITHUB_REPOSITORY" --clobber
             asset_name=$(basename "$installer")
-            asset_dir="$verification_dir/$asset_name"
+            # GitHub normalizes spaces in uploaded asset names to periods.
+            remote_asset_name="${asset_name// /.}"
+            asset_dir="$verification_dir/$remote_asset_name"
             mkdir -p "$asset_dir"
             verified=false
             for attempt in 1 2 3; do
-              rm -f "$asset_dir/$asset_name"
+              rm -f "$asset_dir/$remote_asset_name"
               if gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" \
-                --pattern "$asset_name" --dir "$asset_dir" &&
-                cmp -s "$installer" "$asset_dir/$asset_name"; then
+                --pattern "$remote_asset_name" --dir "$asset_dir" &&
+                cmp -s "$installer" "$asset_dir/$remote_asset_name"; then
                 verified=true
                 break
               fi
