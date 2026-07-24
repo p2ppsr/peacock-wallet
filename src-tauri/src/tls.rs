@@ -209,12 +209,12 @@ fn trust_on_macos(cert_path: &Path, newly_created: bool) -> Result<(), String> {
 }
 
 #[cfg(target_os = "windows")]
-fn trust_on_windows(cert_der: &Path, newly_created: bool) -> Result<(), String> {
-    if !newly_created {
-        return Ok(());
-    }
-
+fn trust_on_windows(cert_der: &Path, _newly_created: bool) -> Result<(), String> {
+    // Use the current-user root store so trust installation does not require
+    // elevation. Retry on every start to repair installs where the old
+    // machine-store command failed and then never retried.
     let status = Command::new("certutil")
+        .arg("-user")
         .arg("-addstore")
         .arg("-f")
         .arg("Root")

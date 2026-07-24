@@ -166,6 +166,7 @@ jobs:
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: false
           prerelease: false
+          uploadUpdaterJson: false
           args: ${{ matrix.args }}
 
       # === Linux AppImage Packaging and Signing ===
@@ -290,10 +291,89 @@ jobs:
         run: |
           $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
           if (-not $signtool) { throw "signtool.exe not found. Ensure Windows 10 SDK is installed on the runner." }
+          $expectedFingerprint = ($env:SM_FINGERPRINT -replace '\s', '').ToUpperInvariant()
           $files = Get-ChildItem -Recurse -Path src-tauri\target\release\bundle\ -Include *.exe,*.msi | Select-Object -ExpandProperty FullName
           foreach ($file in $files) {
-            & $signtool verify /pa "$file"
+            $signature = Get-AuthenticodeSignature -FilePath "$file"
+            if ($signature.Status -ne "Valid") {
+              throw "Authenticode validation failed for $file with status $($signature.Status): $($signature.StatusMessage)"
+            }
+            if (-not $signature.SignerCertificate) {
+              throw "No Authenticode signer certificate found for $file"
+            }
+            $actualFingerprint = ($signature.SignerCertificate.Thumbprint -replace '\s', '').ToUpperInvariant()
+            if ($actualFingerprint -ne $expectedFingerprint) {
+              throw "Unexpected Authenticode certificate for $file. Expected $expectedFingerprint, got $actualFingerprint"
+            }
+            if ($signature.SignerCertificate.NotAfter -le (Get-Date)) {
+              throw "Authenticode signer certificate for $file is expired"
+            }
+            & $signtool verify /pa /all /v "$file"
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool verification failed for $file"
+            }
           }
+
+      - name: Regenerate Tauri signatures after Authenticode signing
+        if: matrix.platform == 'windows-2022'
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          mapfile -t installers < <(
+            find src-tauri/target/release/bundle -type f \
+              \( -name '*.exe' -o -name '*.msi' \) \
+              -print | sort
+          )
+          if [ "${#installers[@]}" -eq 0 ]; then
+            echo "No final Windows installers found for Tauri signing." >&2
+            exit 1
+          fi
+          for installer in "${installers[@]}"; do
+            rm -f "${installer}.sig"
+            npx --no-install tauri signer sign "$installer"
+            test -s "${installer}.sig"
+          done
+
+      - name: Replace GitHub Windows assets with final signed bytes
+        if: matrix.platform == 'windows-2022'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          release_tag="v$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          verification_dir=$(mktemp -d)
+          trap 'rm -rf "$verification_dir"' EXIT
+          mapfile -t installers < <(
+            find src-tauri/target/release/bundle -type f \
+              \( -name '*.exe' -o -name '*.msi' \) \
+              -print | sort
+          )
+          for installer in "${installers[@]}"; do
+            gh release upload "$release_tag" "$installer" "${installer}.sig" \
+              --repo "$GITHUB_REPOSITORY" --clobber
+            asset_name=$(basename "$installer")
+            asset_dir="$verification_dir/$asset_name"
+            mkdir -p "$asset_dir"
+            verified=false
+            for attempt in 1 2 3; do
+              rm -f "$asset_dir/$asset_name"
+              if gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" \
+                --pattern "$asset_name" --dir "$asset_dir" &&
+                cmp -s "$installer" "$asset_dir/$asset_name"; then
+                verified=true
+                break
+              fi
+              sleep "$((attempt * 5))"
+            done
+            if [ "$verified" != true ]; then
+              echo "GitHub release asset does not match final signed installer: $asset_name" >&2
+              exit 1
+            fi
+          done
 
       - name: Upload Windows Artifact - MSI
         if: matrix.platform == 'windows-2022'
@@ -374,10 +454,11 @@ jobs:
               fi
               cp "$msi_path" "release-uploads/user-wallet-windows-x64.msi"
               exe_path=$(
-                find src-tauri/target -type f -name "*.exe" \( -path "*bundle/nsis/*" -o -path "*bundle/nsis-web/*" \) -print -quit
+                find src-tauri/target -type f -name "*.exe" \
+                  -path "*bundle/nsis/*" ! -path "*bundle/nsis-web/*" -print -quit
               )
               if [ -z "${exe_path:-}" ]; then
-                exe_path=$(find src-tauri/target -type f -name "*.exe" -path "*bundle/*" -print -quit)
+                exe_path=$(find src-tauri/target -type f -name "*.exe" -path "*bundle/nsis-web/*" -print -quit)
               fi
               if [ -z "${exe_path:-}" ]; then
                 echo "No EXE installer found for Windows build" >&2
@@ -406,58 +487,120 @@ jobs:
           fi
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           mkdir -p release-uploads/updater
-          bundle_dirs=()
-          if [ -d src-tauri/target/release/bundle ]; then
-            bundle_dirs+=("src-tauri/target/release/bundle")
-          fi
-          while IFS= read -r dir; do
-            bundle_dirs+=("$dir")
-          done < <(find src-tauri/target -maxdepth 3 -type d -path "*/release/bundle" ! -path "src-tauri/target/release/bundle")
-          if [ ${#bundle_dirs[@]} -eq 0 ]; then
-            echo "No Tauri bundle directories found; expected updater artifacts." >&2
+          selected_package=""
+          case "$ARTIFACT_SUFFIX" in
+            macos-arm64)
+              selected_package=$(
+                find src-tauri/target/aarch64-apple-darwin/release/bundle/macos \
+                  -type f -name "*.app.tar.gz" -print 2>/dev/null | sort | head -n1 || true
+              )
+              if [ -z "${selected_package:-}" ]; then
+                selected_package=$(
+                  find src-tauri/target -type f \
+                    -path "*aarch64-apple-darwin*/release/bundle/macos/*" \
+                    -name "*.app.tar.gz" -print 2>/dev/null | sort | head -n1 || true
+                )
+              fi
+              ;;
+            macos-x64)
+              selected_package=$(
+                find src-tauri/target/x86_64-apple-darwin/release/bundle/macos \
+                  -type f -name "*.app.tar.gz" -print 2>/dev/null | sort | head -n1 || true
+              )
+              if [ -z "${selected_package:-}" ]; then
+                selected_package=$(
+                  find src-tauri/target -type f \
+                    -path "*x86_64-apple-darwin*/release/bundle/macos/*" \
+                    -name "*.app.tar.gz" -print 2>/dev/null | sort | head -n1 || true
+                )
+              fi
+              ;;
+            linux-x86_64)
+              # Only AppImage payloads can replace the running Linux executable.
+              selected_package=$(
+                find src-tauri/target/release/bundle/appimage \
+                  -type f \( -name "*.AppImage.tar.gz" -o -name "*.appimage.tar.gz" \) \
+                  -print 2>/dev/null | sort | head -n1 || true
+              )
+              if [ -z "${selected_package:-}" ]; then
+                selected_package=$(
+                  find src-tauri/target -type f \
+                    -path "*/release/bundle/appimage/*" \
+                    \( -name "*.AppImage.tar.gz" -o -name "*.appimage.tar.gz" \) \
+                    -print 2>/dev/null | sort | head -n1 || true
+                )
+              fi
+              if [ -z "${selected_package:-}" ]; then
+                selected_package=$(
+                  find src-tauri/target/release/bundle/appimage \
+                    -type f \( -name "*.AppImage" -o -name "*.appimage" \) \
+                    -print 2>/dev/null | sort | head -n1 || true
+                )
+              fi
+              if [ -z "${selected_package:-}" ]; then
+                selected_package=$(
+                  find src-tauri/target -type f \
+                    -path "*/release/bundle/appimage/*" \
+                    \( -name "*.AppImage" -o -name "*.appimage" \) \
+                    -print 2>/dev/null | sort | head -n1 || true
+                )
+              fi
+              ;;
+            windows-x64)
+              # Publish the final Authenticode-signed installer, never a pre-signing ZIP.
+              selected_package=$(
+                find src-tauri/target/release/bundle/nsis \
+                  -type f -name "*.exe" ! -name "*web*.exe" \
+                  -print 2>/dev/null | sort | head -n1 || true
+              )
+              if [ -z "${selected_package:-}" ]; then
+                selected_package=$(
+                  find src-tauri/target -type f \
+                    -path "*/release/bundle/nsis/*" \
+                    -name "*.exe" ! -name "*web*.exe" \
+                    -print 2>/dev/null | sort | head -n1 || true
+                )
+              fi
+              if [ -z "${selected_package:-}" ]; then
+                selected_package=$(
+                  find src-tauri/target/release/bundle/msi \
+                    -type f -name "*.msi" \
+                    -print 2>/dev/null | sort | head -n1 || true
+                )
+              fi
+              if [ -z "${selected_package:-}" ]; then
+                selected_package=$(
+                  find src-tauri/target -type f \
+                    -path "*/release/bundle/msi/*" -name "*.msi" \
+                    -print 2>/dev/null | sort | head -n1 || true
+                )
+              fi
+              ;;
+            *)
+              echo "No updater selection rules for $ARTIFACT_SUFFIX" >&2
+              exit 1
+              ;;
+          esac
+          if [ -z "$selected_package" ]; then
+            echo "Unable to locate expected updater package for $ARTIFACT_SUFFIX" >&2
+            echo "Available candidate files under src-tauri/target:" >&2
+            find src-tauri/target -type f \
+              \( -name "*.sig" -o -name "*.tar.gz" -o -name "*.AppImage" -o -name "*.appimage" -o -name "*.exe" -o -name "*.msi" \) \
+              -print | sort >&2 || true
             exit 1
           fi
-          selected_package=""
-          selected_signature=""
-          for dir in "${bundle_dirs[@]}"; do
-            while IFS= read -r sig_path; do
-              candidate="${sig_path%.sig}"
-              if [ -f "$candidate" ]; then
-                selected_signature="$sig_path"
-                selected_package="$candidate"
-                break
-              fi
-            done < <(find "$dir" -type f -name '*.sig')
-            if [ -z "$selected_signature" ] && [ -d "$dir/updater" ]; then
-              while IFS= read -r sig_path; do
-                candidate="${sig_path%.sig}"
-                if [ -f "$candidate" ]; then
-                  selected_signature="$sig_path"
-                  selected_package="$candidate"
-                  break
-                fi
-              done < <(find "$dir/updater" -type f -name '*.sig')
-            fi
-            if [ -n "$selected_signature" ]; then
-              break
-            fi
-          done
-          if [ -z "$selected_signature" ] || [ -z "$selected_package" ]; then
-            echo "Unable to locate updater package and signature for $ARTIFACT_SUFFIX" >&2
+          selected_signature="${selected_package}.sig"
+          if [ ! -f "$selected_signature" ]; then
+            echo "Updater signature not found for selected package: $selected_package" >&2
             exit 1
           fi
           package_filename=$(basename "$selected_package")
-          if [[ "$package_filename" == *.AppImage.tar.gz ]]; then
+          package_filename_lc=$(echo "$package_filename" | tr '[:upper:]' '[:lower:]')
+          if [[ "$package_filename_lc" == *.appimage.tar.gz ]]; then
             extension="AppImage.tar.gz"
-          elif [[ "$package_filename" == *.tar.gz ]]; then
+          elif [[ "$package_filename_lc" == *.tar.gz ]]; then
             extension="tar.gz"
-          elif [[ "$package_filename" == *.msi.zip ]]; then
-            extension="msi.zip"
-          elif [[ "$package_filename" == *.nsis.zip ]]; then
-            extension="nsis.zip"
-          elif [[ "$package_filename" == *.zip ]]; then
-            extension="zip"
-          elif [[ "$package_filename" == *.AppImage ]]; then
+          elif [[ "$package_filename_lc" == *.appimage ]]; then
             extension="AppImage"
           else
             if [[ "$package_filename" == *.* ]]; then
@@ -503,6 +646,20 @@ jobs:
           pattern: binaries-*
           path: binaries-site/frontend
           merge-multiple: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify updater artifact signatures
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          node scripts/verify-updater-artifacts.mjs \
+            --frontend binaries-site/frontend \
+            --tauri-config src-tauri/tauri.conf.json
+
       - name: Merge updater manifests
         run: |
           set -euo pipefail
@@ -568,6 +725,27 @@ jobs:
                   print('No updater platforms collected; nothing to write.', file=sys.stderr)
                   sys.exit(1)
 
+              required_targets = ('darwin-aarch64', 'darwin-x86_64', 'linux-x86_64', 'windows-x86_64')
+              missing_targets = [target for target in required_targets if target not in combined['platforms']]
+              if missing_targets:
+                  print(f\"Merged updater manifest missing targets: {', '.join(missing_targets)}\", file=sys.stderr)
+                  sys.exit(1)
+
+              expected_suffixes = {
+                  'darwin-aarch64': ('.tar.gz',),
+                  'darwin-x86_64': ('.tar.gz',),
+                  'linux-x86_64': ('.appimage.tar.gz', '.appimage'),
+                  'windows-x86_64': ('.exe', '.msi')
+              }
+              for target, suffixes in expected_suffixes.items():
+                  filename = os.path.basename(combined['platforms'][target]['url']).lower()
+                  if not any(filename.endswith(suffix) for suffix in suffixes):
+                      print(
+                          f\"Updater manifest target {target} points to unexpected file type: {filename}\",
+                          file=sys.stderr
+                      )
+                      sys.exit(1)
+
               if version:
                   combined['version'] = version
               if notes:
@@ -595,11 +773,6 @@ jobs:
           fi
           sed -i "s/__RELEASE_VERSION__/${RELEASE_VERSION}/g" binaries-site/frontend/index.html
           sed -i "s/__RELEASE_DATE__/${RELEASE_DATE}/g" binaries-site/frontend/index.html
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
 
       - name: Check release version sync
         if: startsWith(github.ref, 'refs/tags/')
@@ -675,3 +848,12 @@ jobs:
             fi
             sleep "$((attempt * 20))"
           done
+
+      - name: Publish canonical GitHub updater manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: |
+          cp binaries-site/frontend/manifest.json "$RUNNER_TEMP/latest.json"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/latest.json" \
+            --repo "$GITHUB_REPOSITORY" --clobber

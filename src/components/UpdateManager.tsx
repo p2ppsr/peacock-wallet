@@ -108,7 +108,7 @@ const UpdateManager: React.FC<UpdateManagerProps> = ({
       toast.success('Update installed! Please restart the application.');
     } catch (err: any) {
       console.error('Error downloading update:', err);
-      const message = err.message || 'Failed to download update';
+      const message = err?.message || String(err || 'Failed to download update');
       setError(message);
       toast.error(message);
       setDownloading(false);
