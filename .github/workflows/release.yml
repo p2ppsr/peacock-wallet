@@ -333,7 +333,10 @@ jobs:
           fi
           for installer in "${installers[@]}"; do
             rm -f "${installer}.sig"
-            npx --no-install tauri signer sign "$installer"
+            npx --no-install tauri signer sign \
+              --private-key "$TAURI_SIGNING_PRIVATE_KEY" \
+              --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
+              "$installer"
             test -s "${installer}.sig"
           done
 
