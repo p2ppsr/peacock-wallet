@@ -78,6 +78,70 @@ use tls::ensure_localhost_tls;
 
 // (no direct plugin imports; we call plugin initializers via fully-qualified paths)
 
+const NATIVE_CRASH_REPORT_FILE: &str = "pending-native-crash.json";
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PendingNativeCrashReport {
+    kind: String,
+    thread: String,
+    file: Option<String>,
+    line: Option<u32>,
+    column: Option<u32>,
+}
+
+fn native_crash_report_path(app_handle: &AppHandle) -> Result<PathBuf, String> {
+    let directory = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|err| err.to_string())?;
+    fs::create_dir_all(&directory).map_err(|err| err.to_string())?;
+    Ok(directory.join(NATIVE_CRASH_REPORT_FILE))
+}
+
+fn install_native_crash_hook(app_handle: &AppHandle) {
+    let Ok(report_path) = native_crash_report_path(app_handle) else {
+        return;
+    };
+    let previous_hook = std::panic::take_hook();
+
+    std::panic::set_hook(Box::new(move |panic_info| {
+        let location = panic_info.location();
+        let report = PendingNativeCrashReport {
+            kind: "panic".into(),
+            thread: std::thread::current().name().unwrap_or("unnamed").to_string(),
+            file: location.and_then(|item| {
+                Path::new(item.file())
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(str::to_string)
+            }),
+            line: location.map(|item| item.line()),
+            column: location.map(|item| item.column()),
+        };
+
+        if let Ok(json) = serde_json::to_vec(&report) {
+            let _ = fs::write(&report_path, json);
+        }
+        previous_hook(panic_info);
+    }));
+}
+
+#[tauri::command]
+fn take_pending_crash_report(
+    app_handle: AppHandle,
+) -> Result<Option<PendingNativeCrashReport>, String> {
+    let path = native_crash_report_path(&app_handle)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+
+    let bytes = fs::read(&path).map_err(|err| err.to_string())?;
+    fs::remove_file(&path).map_err(|err| err.to_string())?;
+    let report = serde_json::from_slice(&bytes).map_err(|err| err.to_string())?;
+    Ok(Some(report))
+}
+
 #[tauri::command]
 async fn save_file(path: String, contents: Vec<u8>) -> Result<(), String> {
     use std::fs::File;
@@ -919,6 +983,8 @@ fn main() {
             }
         })
         .setup(|app| {
+            install_native_crash_hook(app.handle());
+
             // Extract the main window.
             let main_window = app.get_webview_window(MAIN_WINDOW_NAME).unwrap();
             fit_main_window_to_work_area(&main_window);
@@ -1207,6 +1273,7 @@ fn main() {
         download,
         save_file,
         proxy_fetch_manifest,
+        take_pending_crash_report,
         binary_bridge::register_binary_handler,
         binary_bridge::clear_binary_handler,
         binary_bridge::respond_binary

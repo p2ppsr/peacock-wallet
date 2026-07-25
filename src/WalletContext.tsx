@@ -41,6 +41,7 @@ import { getIdentityClient, getRegistryClient } from './utils/clientFactories'
 import { reconcileStoredKeyMaterial } from './utils/keyMaterial'
 import { listen } from '@tauri-apps/api/event'
 import type { ActivePromptSummary, WalletBridgeInspector } from './onWalletReady'
+import { reportDiagnosticError, reportDiagnosticEvent } from './diagnostics'
 
 // -----
 // Permission Configuration (User Wallet specific)
@@ -1092,6 +1093,10 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       return permissionsManager;
     } catch (error: any) {
       console.error("Error building wallet:", error);
+      reportDiagnosticError('wallet.build_failed', error, {
+        surface: 'wallet-lifecycle',
+        context: { network: selectedNetwork }
+      })
       toast.error("Failed to build wallet: " + error.message);
       return null;
     }
@@ -1118,6 +1123,9 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         // We'll handle setting snapshotLoaded in a separate effect watching authenticated state
       } catch (err: any) {
         console.error("Error loading snapshot", err);
+        reportDiagnosticError('wallet.snapshot_load_failed', err, {
+          surface: 'wallet-lifecycle'
+        })
         localStorage.removeItem('snap'); // Clear invalid snapshot
         toast.error("Couldn't load saved data: " + err.message);
       }
@@ -1146,6 +1154,10 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
         // Set initial managers state to prevent null references
         setManagers(m => ({ ...m, walletManager }));
+        reportDiagnosticEvent('wallet.manager_initialized', {
+          surface: 'wallet-lifecycle',
+          context: { network: selectedNetwork }
+        })
 
         const hydrateFromStorage = async () => {
           try {
@@ -1159,12 +1171,19 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
             }
           } catch (err: any) {
             console.error('Error hydrating wallet from storage:', err);
+            reportDiagnosticError('wallet.storage_hydration_failed', err, {
+              surface: 'wallet-lifecycle'
+            })
           }
         };
 
         hydrateFromStorage();
       } catch (err: any) {
         console.error("Error initializing wallet manager:", err);
+        reportDiagnosticError('wallet.manager_initialization_failed', err, {
+          surface: 'wallet-lifecycle',
+          context: { network: selectedNetwork }
+        })
         toast.error("Failed to initialize wallet: " + err.message);
       }
     }
@@ -1581,8 +1600,14 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         }
 
         walletListenerRef.current = unlisten ?? undefined;
+        reportDiagnosticEvent('wallet.bridge_listener_ready', {
+          surface: 'wallet-bridge'
+        })
       } catch (error) {
         console.error('Failed to initialize wallet request listener:', error);
+        reportDiagnosticError('wallet.bridge_listener_failed', error, {
+          surface: 'wallet-bridge'
+        })
       }
     };
 

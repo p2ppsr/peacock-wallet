@@ -5,6 +5,8 @@ import {
   Box,
   Paper,
   Button,
+  Checkbox,
+  FormControlLabel,
   useTheme,
   Dialog,
   DialogTitle,
@@ -23,6 +25,11 @@ import PageLoading from '../../../components/PageLoading'
 import { toast } from 'react-toastify'
 import { useNavigate } from 'react-router-dom'
 import { reconcileStoredKeyMaterial } from '../../../utils/keyMaterial'
+import {
+  DIAGNOSTICS_PREFERENCE_EVENT,
+  getDiagnosticsEnabled,
+  setDiagnosticsEnabled
+} from '../../../diagnostics'
 
 const Settings: React.FC = () => {
   const { settings, updateSettings } = useContext(WalletContext)
@@ -30,6 +37,7 @@ const Settings: React.FC = () => {
   const theme = useTheme()
   const navigate = useNavigate()
   const [settingsLoading, setSettingsLoading] = useState(false)
+  const [diagnosticsEnabled, setDiagnosticsPreference] = useState(getDiagnosticsEnabled)
   const isDarkMode = theme.palette.mode === 'dark'
   const [privateKeyHex, setPrivateKeyHex] = useState('')
   const [savedMnemonic, setSavedMnemonic] = useState('')
@@ -48,6 +56,12 @@ const Settings: React.FC = () => {
       setSelectedTheme(settings.theme.mode)
     }
   }, [settings])
+
+  useEffect(() => {
+    const syncPreference = () => setDiagnosticsPreference(getDiagnosticsEnabled())
+    window.addEventListener(DIAGNOSTICS_PREFERENCE_EVENT, syncPreference)
+    return () => window.removeEventListener(DIAGNOSTICS_PREFERENCE_EVENT, syncPreference)
+  }, [])
 
   const loadStoredKeys = useCallback(() => {
     if (typeof window === 'undefined') return
@@ -202,6 +216,36 @@ const Settings: React.FC = () => {
         >
           Open Advanced Settings
         </Button>
+      </Paper>
+
+      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4 }}>
+        <Typography variant="h4" sx={{ mb: 1 }}>
+          Diagnostics & Crash Reports
+        </Typography>
+        <Typography variant="body1" color="textSecondary" sx={{ mb: 1 }}>
+          Help us find startup, update, wallet connection, and unexpected app failures.
+        </Typography>
+        <FormControlLabel
+          control={(
+            <Checkbox
+              checked={diagnosticsEnabled}
+              onChange={event => {
+                const enabled = event.target.checked
+                setDiagnosticsEnabled(enabled)
+                setDiagnosticsPreference(enabled)
+                toast.success(enabled
+                  ? 'Anonymous diagnostics enabled.'
+                  : 'Diagnostics disabled and queued reports removed.')
+              }}
+            />
+          )}
+          label="Send anonymous diagnostics and crash reports"
+        />
+        <Typography variant="body2" color="textSecondary">
+          Reports include the app version, operating-system class, failure category, and redacted
+          error details. They never include keys, recovery phrases, wallet identity, transaction
+          data, certificates, or message contents. Uncheck this box to opt out at any time.
+        </Typography>
       </Paper>
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper' }}>
