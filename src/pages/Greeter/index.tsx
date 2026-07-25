@@ -578,7 +578,6 @@ const Greeter: React.FC = () => {
                                 console.debug('Failed to queue app info:', error)
                               }
                               setAppinfo(sim);
-                              setPausedBoth(true);
                             }}
                           />
                         </Box>

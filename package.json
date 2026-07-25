@@ -1,7 +1,7 @@
 {
   "name": "user-wallet",
   "private": true,
-  "version": "0.1.21",
+  "version": "0.1.22",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -28,33 +28,33 @@
     "clean": "rm -rf node_modules dist src-tauri/target .vite .cache package-lock.json yarn.lock pnpm-lock.yaml && cd src-tauri && cargo clean || true"
   },
   "dependencies": {
-    "@bsv/message-box-client": "^2.0.4",
-    "@bsv/sdk": "^2.1.6",
+    "@bsv/message-box-client": "^2.2.2",
+    "@bsv/sdk": "^2.2.0",
     "@bsv/uhrp-react": "^1.0.6",
-    "@bsv/wallet-toolbox-client": "^2.2.0",
+    "@bsv/wallet-toolbox-client": "^2.4.4",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^6.5.0",
     "@mui/material": "^6.5.0",
-    "@tauri-apps/api": "^2.9.0",
-    "@tauri-apps/plugin-dialog": "^2.4.2",
-    "@tauri-apps/plugin-updater": "^2.9.0",
+    "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "amountinator": "^0.2.12",
     "date-fns": "^4.1.0",
     "fuse.js": "^7.1.0",
     "jdenticon": "^3.3.0",
-    "metanet-apps": "^1.0.9",
+    "metanet-apps": "^1.1.1",
     "qrcode.react": "^3.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.28.0",
+    "react-router-dom": "7.18.1",
     "react-toastify": "^11.0.3",
     "satoshi-shop-client": "^2.0.6",
     "use-async-effect": "^2.2.7"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.9.2",
-    "@tauri-apps/plugin-opener": "^2.5.2",
+    "@tauri-apps/cli": "^2.11.4",
+    "@tauri-apps/plugin-opener": "^2.5.4",
     "@types/node": "^22.13.1",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
@@ -71,5 +71,10 @@
     "typescript-eslint": "^8.46.2",
     "vite": "^6.4.1",
     "vitest": "^4.1.8"
+  },
+  "overrides": {
+    "satoshi-shop-client": {
+      "@bsv/sdk": "2.2.0"
+    }
   }
 }

@@ -9,6 +9,7 @@ import { tauriFunctions } from './tauriFunctions'
 import packageJson from '../package.json'
 import { createTheme, ThemeProvider } from '@mui/material/styles'
 import { registerPreLoginRoutes } from './preLoginRoutes'
+import { initializeDiagnostics } from './diagnostics'
 
 // Define a theme that includes the custom structure expected by the components
 const theme = createTheme({
@@ -20,6 +21,7 @@ const theme = createTheme({
   }
 })
 
+initializeDiagnostics()
 const preLoginUnlistenPromise = registerPreLoginRoutes()
 
 // Create the root and render:

@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import { reportDiagnosticError } from './diagnostics';
 
 interface Props {
   children: ReactNode;
@@ -22,6 +23,9 @@ class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught error:', error, errorInfo);
+    reportDiagnosticError('app.react_crash', error, {
+      surface: 'react'
+    });
   }
 
   public render() {

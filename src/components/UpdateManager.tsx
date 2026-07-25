@@ -15,6 +15,7 @@ import {
 import { Download as DownloadIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { createDownloadProgressTracker, type DownloadProgressPercent } from './updateProgress';
+import { reportDiagnosticError, reportDiagnosticEvent } from '../diagnostics';
 
 interface UpdateManagerProps {
   checkOnMount?: boolean;
@@ -37,6 +38,10 @@ const UpdateManager: React.FC<UpdateManagerProps> = ({
       setError(null);
       const update = await check();
       if (update?.available) {
+        reportDiagnosticEvent('updater.update_available', {
+          surface: 'updater',
+          context: { targetVersion: update.version }
+        });
         setUpdateInfo(update);
         setUpdateAvailable(true);
         if (!silent) {
@@ -50,31 +55,10 @@ const UpdateManager: React.FC<UpdateManagerProps> = ({
         }
       }
     } catch (err: any) {
-      console.error('Error type:', typeof err);
-      console.error('Error constructor:', err.constructor.name);
-      console.error('Error message:', err.message);
-      console.error('Error string:', String(err));
-      console.error('Error object:', err);
-      console.error('Error properties:', Object.getOwnPropertyNames(err));
-      
-      // Try to extract more info
-      if (err.cause) {
-        console.error('Error cause:', err.cause);
-      }
-      if (err.stack) {
-        console.error('Error stack:', err.stack);
-      }
-      if (err.name) {
-        console.error('Error name:', err.name);
-      }
-      
-      console.error('Full error details:', {
-        message: err.message,
-        code: err.code,
-        cause: err.cause,
-        stack: err.stack,
-        name: err.name,
-        toString: err.toString()
+      console.error('Error checking for updates:', err);
+      reportDiagnosticError('updater.check_failed', err, {
+        surface: 'updater',
+        context: { silent }
       });
       
       if (!silent) {
@@ -105,9 +89,17 @@ const UpdateManager: React.FC<UpdateManagerProps> = ({
       setShowDialog(false);
       setUpdateAvailable(false);
       setUpdateInfo(null);
+      reportDiagnosticEvent('updater.install_succeeded', {
+        surface: 'updater',
+        context: { targetVersion: updateInfo.version }
+      });
       toast.success('Update installed! Please restart the application.');
     } catch (err: any) {
       console.error('Error downloading update:', err);
+      reportDiagnosticError('updater.install_failed', err, {
+        surface: 'updater',
+        context: { targetVersion: updateInfo?.version }
+      });
       const message = err?.message || String(err || 'Failed to download update');
       setError(message);
       toast.error(message);
@@ -259,6 +251,7 @@ export const useUpdateChecker = () => {
       return update;
     } catch (err) {
       console.error('Error checking for updates:', err);
+      reportDiagnosticError('updater.manual_check_failed', err, { surface: 'updater' });
       throw err;
     } finally {
       setChecking(false);

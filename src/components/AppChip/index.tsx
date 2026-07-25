@@ -60,26 +60,27 @@ const AppChip: React.FC<AppChipProps> = ({
   if (typeof label !== 'string') {
     throw new Error('Error in AppChip: label prop must be a string!')
   }
-  if (label.startsWith('babbage_app_')) {
-    label = label.substring(12)
+  let displayLabel = label
+  if (displayLabel.startsWith('babbage_app_')) {
+    displayLabel = displayLabel.substring(12)
   }
-  if (label.startsWith('https://')) {
-    label = label.substring(8)
+  if (displayLabel.startsWith('https://')) {
+    displayLabel = displayLabel.substring(8)
   }
-  if (label.startsWith('http://')) {
-    label = label.substring(7)
+  if (displayLabel.startsWith('http://')) {
+    displayLabel = displayLabel.substring(7)
   }
-  const [parsedLabel, setParsedLabel] = useState(label)
-  const [appIconImageUrl, setAppIconImageUrl] = useState(generateDefaultIcon(label))
+  const [parsedLabel, setParsedLabel] = useState(displayLabel)
+  const [appIconImageUrl, setAppIconImageUrl] = useState(generateDefaultIcon(displayLabel))
   const [imageError, setImageError] = useState(false)
 
   // Reset state values when label changes to prevent stale data
   useEffect(() => {
     // When label changes, reset to default state first to avoid showing stale data
-    setParsedLabel(label)
-    setAppIconImageUrl(generateDefaultIcon(label))
+    setParsedLabel(displayLabel)
+    setAppIconImageUrl(generateDefaultIcon(displayLabel))
     setImageError(false)
-  }, [label])
+  }, [displayLabel])
 
   // Handle data fetching in a separate effect
   useEffect(() => {
@@ -87,22 +88,22 @@ const AppChip: React.FC<AppChipProps> = ({
     const controller = new AbortController()
 
     const fetchAndCacheData = async () => {
-      const faviconKey = `favicon_label_${label}`
-      const manifestKey = `manifest_label_${label}`
+      const faviconKey = `favicon_label_${displayLabel}`
+      const manifestKey = `manifest_label_${displayLabel}`
 
       const cachedFavicon = window.localStorage.getItem(faviconKey)
       if (cachedFavicon && !cancelled) {
         setAppIconImageUrl(cachedFavicon)
       }
 
-      const faviconUrl = `https://${label}/favicon.ico`
+      const faviconUrl = `https://${displayLabel}/favicon.ico`
       try {
         if (!cancelled && await isImageUrl(faviconUrl)) {
           setAppIconImageUrl(faviconUrl)
           window.localStorage.setItem(faviconKey, faviconUrl)
         }
       } catch (error) {
-        console.warn('Failed to resolve favicon for app', label, error)
+        console.warn('Failed to resolve favicon for app', displayLabel, error)
       }
 
       const cachedManifest = window.localStorage.getItem(manifestKey)
@@ -119,8 +120,8 @@ const AppChip: React.FC<AppChipProps> = ({
       }
 
       try {
-        const protocol = label.startsWith('localhost:') ? 'http' : 'https'
-        const url = `${protocol}://${label}/manifest.json`
+        const protocol = displayLabel.startsWith('localhost:') ? 'http' : 'https'
+        const url = `${protocol}://${displayLabel}/manifest.json`
         const response = await fetch(url, { signal: controller.signal })
 
         if (!response.ok) {
@@ -146,7 +147,7 @@ const AppChip: React.FC<AppChipProps> = ({
       cancelled = true
       controller.abort()
     }
-  }, [label])
+  }, [displayLabel])
 
   // Handle image loading events
   const handleImageLoad = () => {
@@ -182,7 +183,7 @@ const AppChip: React.FC<AppChipProps> = ({
             justifyContent: 'flex-start'
           }}
           label={
-            (showDomain && label !== parsedLabel)
+            (showDomain && displayLabel !== parsedLabel)
               ? <Box sx={{ 
                   textAlign: 'left', 
                   py: 0.5,
@@ -204,7 +205,7 @@ const AppChip: React.FC<AppChipProps> = ({
                   >
                     {parsedLabel}
                   </Typography>
-                  <Tooltip title={label} arrow placement="bottom">
+                  <Tooltip title={displayLabel} arrow placement="bottom">
                     <Typography
                       variant="caption"
                       sx={{
@@ -218,7 +219,7 @@ const AppChip: React.FC<AppChipProps> = ({
                         // cursor: 'help'
                       }}
                     >
-                      {label}
+                      {displayLabel}
                     </Typography>
                   </Tooltip>
                 </Box>
@@ -302,7 +303,7 @@ const AppChip: React.FC<AppChipProps> = ({
                 </Avatar>
               ) : (
                 <PlaceholderAvatar
-                  name={parsedLabel || label}
+                  name={parsedLabel || displayLabel}
                   variant="rounded"
                   size={36}
                   sx={{ 
@@ -319,7 +320,7 @@ const AppChip: React.FC<AppChipProps> = ({
                 onClick(e)
               } else {
                 e.stopPropagation()
-                navigate(`/dashboard/app/${encodeURIComponent(label)}`)
+                navigate(`/dashboard/app/${encodeURIComponent(displayLabel)}`)
               }
             }
           }}
