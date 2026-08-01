@@ -12,7 +12,7 @@ import useSxStyles from '../../../utils/useSxStyles'
 import TrustedEntity from './TrustedEntity'
 import arraysOfObjectsAreEqual from '../../../utils/arraysOfObjectsAreEqual'
 import AddEntityModal from './AddEntityModal'
-import type { Certifier } from '@bsv/wallet-toolbox-client/out/src/WalletSettingsManager'
+import type { Certifier } from '@bsv/wallet-toolbox-client'
 
 const Trust: React.FC = () => {
   const { settings, updateSettings } = useContext(WalletContext)

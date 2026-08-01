@@ -24,7 +24,7 @@ import VerifiedIcon from '@mui/icons-material/Verified'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import CustomDialog from '../../../components/CustomDialog'
-import { Certifier } from '@bsv/wallet-toolbox-client/out/src/WalletSettingsManager'
+import { Certifier } from '@bsv/wallet-toolbox-client'
 import { useTheme } from '@mui/material/styles'
 import deterministicImage from '../../../utils/deterministicImage'
 

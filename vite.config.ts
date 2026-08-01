@@ -47,6 +47,11 @@ export default defineConfig(async () => ({
   },
   resolve: {
     extensions: [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json"],
-    preserveSymlinks: true
+    preserveSymlinks: true,
+    alias: {
+      // amountinator 0.2.13 still references the former deep module path.
+      // Route it through Wallet Toolbox's supported browser entrypoint.
+      '@bsv/wallet-toolbox-client/out/src/WalletSettingsManager': '@bsv/wallet-toolbox-client'
+    }
   },
 }));

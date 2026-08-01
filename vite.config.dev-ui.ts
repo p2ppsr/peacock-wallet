@@ -42,9 +42,9 @@ export default defineConfig({
     extensions: [".mjs", ".js", ".ts", ".jsx", ".tsx", ".json"],
     preserveSymlinks: true,
     dedupe: ["react", "react-dom"],
-    // alias: {
-    //   "@bsv/brc100-ui-react-components": linkedPackagePath
-    // },
+    alias: {
+      '@bsv/wallet-toolbox-client/out/src/WalletSettingsManager': '@bsv/wallet-toolbox-client'
+    },
   },
 
   // optimizeDeps: {

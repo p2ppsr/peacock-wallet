@@ -18,6 +18,9 @@ import {
   StorageClient,
   PermissionRequest,
   WalletLogger,
+  DEFAULT_SETTINGS,
+  WalletSettings,
+  WalletSettingsManager,
 } from '@bsv/wallet-toolbox-client'
 import {
   PrivateKey,
@@ -26,7 +29,6 @@ import {
   CachedKeyDeriver,
 } from '@bsv/sdk'
 import type { IdentityClient, RegistryClient } from '@bsv/sdk'
-import { DEFAULT_SETTINGS, WalletSettings, WalletSettingsManager } from '@bsv/wallet-toolbox-client/out/src/WalletSettingsManager'
 import type { PermissionsManagerConfig } from '@bsv/wallet-toolbox-client'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
