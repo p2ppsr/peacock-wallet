@@ -3,7 +3,7 @@ import { Typography, Button, Grid, LinearProgress, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { WalletContext } from '../../WalletContext';
-import { WalletSettings } from '@bsv/wallet-toolbox-client/out/src/WalletSettingsManager';
+import { WalletSettings } from '@bsv/wallet-toolbox-client';
 
 type ModeOption = 'light' | 'dark';
 

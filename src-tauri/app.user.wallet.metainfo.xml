@@ -19,6 +19,6 @@
     <binary>user-wallet</binary>
   </provides>
   <releases>
-    <release version="0.1.22" date="2026-07-25"/>
+    <release version="0.1.23" date="2026-08-01"/>
   </releases>
 </component>
