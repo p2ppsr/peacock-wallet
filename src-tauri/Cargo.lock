@@ -4752,7 +4752,7 @@ dependencies = [
 
 [[package]]
 name = "user-wallet"
-version = "0.1.23"
+version = "0.1.24"
 dependencies = [
  "dashmap",
  "hyper 0.14.32",
