@@ -1,7 +1,7 @@
 {
   "name": "user-wallet",
   "private": true,
-  "version": "0.1.25",
+  "version": "0.1.26",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -28,10 +28,10 @@
     "clean": "rm -rf node_modules dist src-tauri/target .vite .cache package-lock.json yarn.lock pnpm-lock.yaml && cd src-tauri && cargo clean || true"
   },
   "dependencies": {
-    "@bsv/message-box-client": "2.2.6",
-    "@bsv/sdk": "2.3.0",
+    "@bsv/message-box-client": "2.3.0",
+    "@bsv/sdk": "2.3.1",
     "@bsv/uhrp-react": "^1.0.6",
-    "@bsv/wallet-toolbox-client": "2.5.0",
+    "@bsv/wallet-toolbox-client": "2.6.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^6.5.0",
@@ -47,7 +47,7 @@
     "qrcode.react": "^3.1.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "7.18.1",
+    "react-router-dom": "7.18.2",
     "react-toastify": "^11.0.3",
     "satoshi-shop-client": "^2.0.6",
     "use-async-effect": "^2.2.7"
@@ -74,7 +74,7 @@
   },
   "overrides": {
     "satoshi-shop-client": {
-      "@bsv/sdk": "2.3.0"
+      "@bsv/sdk": "2.3.1"
     }
   }
 }
