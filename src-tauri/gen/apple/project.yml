@@ -10,7 +10,7 @@ configs:
 settingGroups:
   app:
     base:
-      PRODUCT_NAME: User Wallet
+      PRODUCT_NAME: Peacock Wallet
       PRODUCT_BUNDLE_IDENTIFIER: app.user.wallet
 targetTemplates:
   app:

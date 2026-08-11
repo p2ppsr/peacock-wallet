@@ -313,16 +313,16 @@ const MyIdentity: React.FC = () => {
         {network === 'testnet' ? 'Testnet Identity' : 'Identity'}
       </Typography>
       <Typography variant="body1" color="textSecondary" sx={{ mb: 4 }}>
-        Manage your identity keys and certificates.
+        Manage the public identity apps use to recognize you and the credentials that support it.
       </Typography>
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4 }}>
         <Typography variant="h4" sx={{ mb: 2 }}>
-          Identity Keys
+          Your public identity key
         </Typography>
         <Box sx={{ mb: 3 }}>
           <Typography variant="body2" color="textSecondary" sx={{ mb: 1 }}>
-            <b>Everyday Identity Key:</b>
+            Share this public key when an app or person needs to identify you. It cannot unlock your wallet.
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <Typography
@@ -339,6 +339,7 @@ const MyIdentity: React.FC = () => {
               {primaryIdentityKey}
             </Typography>
             <IconButton
+              aria-label="Copy public identity key"
               size='small'
               onClick={() => handleCopy(primaryIdentityKey)}
               disabled={copied.id}
@@ -355,31 +356,21 @@ const MyIdentity: React.FC = () => {
           Certificates
         </Typography>
         <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
-          As you go about your life, people and businesses you interact with can give you certificates and credentials. These verify your qualifications and help you establish trust.
+          Certifiers can issue credentials that let other people and apps verify selected facts about you. You control whether each credential is public.
         </Typography>
 
         <Grid2 container spacing={2} columns={{ xs: 1, md: 2 }}>
           {certificates.map(cert => (
             <Grid2 key={`${cert.serialNumber}-${cert.certifier}`} size={{ xs: 1, md: 1 }}>
-              <Box
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: 'action.hover',
-                  border: '1px solid',
-                  borderColor: 'divider'
-                }}
-              >
-                <CertificateCard
-                  certificate={cert}
-                  clickable={false}
-                  canRelinquish
-                  onRelinquish={handleRelinquishCertificate}
-                  onPublicVisibilityChange={handlePublicVisibilityChange}
-                  publicOnChain={onChainSerialNumbers.includes(cert.serialNumber)}
-                  busy={Boolean(busySerialNumbers[cert.serialNumber])}
-                />
-              </Box>
+              <CertificateCard
+                certificate={cert}
+                clickable={false}
+                canRelinquish
+                onRelinquish={handleRelinquishCertificate}
+                onPublicVisibilityChange={handlePublicVisibilityChange}
+                publicOnChain={onChainSerialNumbers.includes(cert.serialNumber)}
+                busy={Boolean(busySerialNumbers[cert.serialNumber])}
+              />
             </Grid2>
           ))}
         </Grid2>
@@ -387,7 +378,7 @@ const MyIdentity: React.FC = () => {
         {certificates.length === 0 && (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography color="textSecondary">
-              No certificates found. Register with identity certifiers to receive certificates.
+              No credentials yet. They will appear here after a trusted certifier issues one to you.
             </Typography>
           </Box>
         )}

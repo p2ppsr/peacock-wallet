@@ -7,6 +7,21 @@ export default (theme: Theme) => ({
     alignItems: 'center',
     gridGap: theme.spacing(2),
     boxSizing: 'border-box',
+    [theme.breakpoints.down('sm')]: {
+      gridTemplateColumns: 'auto 1fr',
+      '& > :nth-of-type(2)': {
+        display: 'none'
+      },
+      '& > :nth-of-type(3)': {
+        gridColumn: '2'
+      },
+      '& > :nth-of-type(4)': {
+        gridColumn: '1 / -1',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: theme.spacing(1)
+      }
+    }
   },
   app_icon: {
     width: '5em',
@@ -14,13 +29,10 @@ export default (theme: Theme) => ({
   },
   action_button: {
     [theme.breakpoints.down('sm')]: {
-      display: 'none'
+      width: '100%'
     }
   },
   back_button: {
-    marginRight: theme.spacing(1),
-    [theme.breakpoints.down('sm')]: {
-      display: 'none'
-    }
+    marginRight: theme.spacing(1)
   }
 })

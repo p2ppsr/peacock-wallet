@@ -47,7 +47,7 @@ if (rootElement) {
             }}
             nativeHandlers={tauriFunctions}
             appVersion={packageJson.version}
-            appName="User Wallet"
+            appName="Peacock Wallet"
           />
         </ErrorBoundary>
       </ThemeProvider>

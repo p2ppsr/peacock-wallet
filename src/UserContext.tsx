@@ -84,7 +84,7 @@ export const UserContext = createContext<UserContextValue>({} as UserContextValu
  */
 export const UserContextProvider: React.FC<UserContextProps> = ({
     appVersion = packageJson.version,
-    appName = 'User Wallet',
+    appName = 'Peacock Wallet',
     children,
     nativeHandlers = defaultNativeHandlers
 }) => {

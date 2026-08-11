@@ -181,7 +181,7 @@ const UpdateManager: React.FC<UpdateManagerProps> = ({
           ) : null}
           
           <DialogContentText sx={{ mb: 2 }}>
-            A new version of User Wallet is available.
+            A new version of Peacock Wallet is available.
             {updateInfo?.version && ` Version ${updateInfo.version} is ready to install.`}
           </DialogContentText>
 

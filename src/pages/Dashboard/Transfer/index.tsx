@@ -37,6 +37,8 @@ import { MESSAGEBOX_HOST } from '../../../config'
 import { CurrencyConverter } from 'amountinator'
 import { useLocation, useNavigate } from 'react-router-dom'
 import useAsyncEffect from 'use-async-effect'
+import { ExchangeRateContext } from '../../../components/AmountDisplay/ExchangeRateContextProvider'
+import { showSatoshiShopFundingModal, showSatoshiShopPendingTransactionsModal } from '../../Shop/shopModal'
 
 export type PeerPayRouteProps = {
   defaultRecipient?: string
@@ -641,10 +643,62 @@ function ReceivePanel({ identityKey, onCopy, copied }: ReceivePanelProps) {
   )
 }
 
+type BuyPanelProps = {
+  wallet: WalletInterface | null
+  satoshisPerUSD?: number
+}
+
+function BuyPanel({ wallet, satoshisPerUSD }: BuyPanelProps) {
+  const [funding, setFunding] = useState(false)
+
+  const openPurchase = async (pending = false) => {
+    if (!wallet) return
+    setFunding(true)
+    try {
+      const options = {
+        title: 'Buy sats',
+        introText: 'Use your card to add sats to Peacock.',
+        postPurchaseText: 'Your balance will update when the purchase arrives.',
+        cancelText: 'Close',
+        marketSatoshisPerUSD: satoshisPerUSD
+      }
+      if (pending) {
+        await showSatoshiShopPendingTransactionsModal(wallet, options)
+      } else {
+        await showSatoshiShopFundingModal(wallet, 0, options)
+      }
+    } finally {
+      setFunding(false)
+    }
+  }
+
+  return (
+    <Stack spacing={2.5}>
+      <Box>
+        <Typography variant="h5">Add sats with a card</Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+          Purchases are handled by Satoshi Shop. Peacock will refresh your balance after the payment arrives.
+        </Typography>
+      </Box>
+      {!wallet && <Alert severity="info">The wallet is still starting. Try again in a moment.</Alert>}
+      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+        <Button variant="contained" disabled={!wallet || funding} onClick={() => void openPurchase()}>
+          {funding ? 'Opening…' : 'Continue to purchase'}
+        </Button>
+        <Button variant="outlined" disabled={!wallet || funding} onClick={() => void openPurchase(true)}>
+          Check pending purchases
+        </Button>
+      </Stack>
+      <Alert severity="info" variant="outlined">Selling is not available yet, so Peacock does not advertise a sell action.</Alert>
+    </Stack>
+  )
+}
+
 export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
   const { managers, adminOriginator, clients } = useContext(WalletContext)
   const location = useLocation()
   const navigate = useNavigate()
+  const rates = useContext(ExchangeRateContext)
 
   const identityClient = clients.identityClient
 
@@ -673,12 +727,12 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
   })
   const [identityKey, setIdentityKey] = useState('')
   const [copied, setCopied] = useState(false)
-  const [activeTab, setActiveTab] = useState<'send' | 'receive'>(() => {
+  const [activeTab, setActiveTab] = useState<'send' | 'receive' | 'buy'>(() => {
     const tabParam = new URLSearchParams(location.search).get('tab')
-    return tabParam === 'receive' ? 'receive' : 'send'
+    return tabParam === 'receive' || tabParam === 'buy' ? tabParam : 'send'
   })
 
-  const syncTabToUrl = useCallback((nextTab: 'send' | 'receive') => {
+  const syncTabToUrl = useCallback((nextTab: 'send' | 'receive' | 'buy') => {
     const params = new URLSearchParams(location.search)
     params.set('tab', nextTab)
     navigate({ pathname: location.pathname, search: `?${params.toString()}` }, { replace: true })
@@ -686,7 +740,7 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
 
   useEffect(() => {
     const tabParam = new URLSearchParams(location.search).get('tab')
-    const nextTab = tabParam === 'receive' ? 'receive' : 'send'
+    const nextTab = tabParam === 'receive' || tabParam === 'buy' ? tabParam : 'send'
     if (nextTab !== activeTab) {
       setActiveTab(nextTab)
     }
@@ -764,14 +818,15 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
           Payments
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Send directly to identity keys or share yours to receive.
+          Send to an identity, receive pending payments, or add sats.
         </Typography>
 
         <Paper elevation={2} sx={{ mb: 3 }}>
           <Tabs
+            aria-label="Payment actions"
             value={activeTab}
             onChange={(_, value) => {
-              const nextTab = value as 'send' | 'receive'
+              const nextTab = value as 'send' | 'receive' | 'buy'
               setActiveTab(nextTab)
               syncTabToUrl(nextTab)
             }}
@@ -781,6 +836,7 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
           >
             <Tab label="Send" value="send" />
             <Tab label="Receive" value="receive" />
+            <Tab label="Buy sats" value="buy" />
           </Tabs>
 
           <Box sx={{ p: 3 }}>
@@ -791,8 +847,10 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
                 defaultRecipient={defaultRecipient}
                 identityClient={identityClient}
               />
-            ) : (
+            ) : activeTab === 'receive' ? (
               <ReceivePanel identityKey={identityKey} onCopy={handleCopyIdentityKey} copied={copied} />
+            ) : (
+              <BuyPanel wallet={walletClientForPeerPay} satoshisPerUSD={rates?.satoshisPerUSD} />
             )}
           </Box>
         </Paper>

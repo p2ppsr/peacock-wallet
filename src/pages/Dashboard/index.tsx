@@ -16,7 +16,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import PageLoading from '../../components/PageLoading';
-import Menu from '../../navigation/Menu';
+import Menu, { WALLET_NAV_WIDTH } from '../../navigation/Menu';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import MyIdentity from './MyIdentity'; // Assuming index.tsx or similar
 import Trust from './Trust'; // Assuming index.tsx or similar
@@ -96,7 +96,7 @@ export default function Dashboard() {
   const getMargin = () => {
     if (menuOpen && !breakpoints.sm) {
       // Adjust margin based on Menu width if needed
-      return '320px'; // Example width, match Menu component
+      return `${WALLET_NAV_WIDTH}px`;
     }
     return '0px';
   };
@@ -259,8 +259,8 @@ export default function Dashboard() {
           <Route path='' element={<Navigate to='/dashboard/home' replace />} />
           <Route path='identity' element={<MyIdentity />} />
           <Route path='trust' element={<Trust />} />
-          <Route path='apps' element={<Navigate to='/dashboard/home' replace />} />
-          <Route path='app-catalog' element={<Navigate to='/dashboard/home' replace />} />
+          <Route path='apps' element={<Apps />} />
+          <Route path='app-catalog' element={<Apps />} />
           <Route path='recent-apps' element={<Apps />} />
           <Route path='app/*' element={<App />} />
           <Route path='manage-app/:originator' element={<AppAccess />} />

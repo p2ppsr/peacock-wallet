@@ -1,8 +1,10 @@
-# User Wallet
+# Peacock Wallet
 
 > Secure identity + payments wallet for the BSV ecosystem, built with Tauri and React. This project is open for contributors who want to improve the wallet experience, security, and developer tooling.
 
-![User Wallet screenshot](./screen.png)
+Peacock is named for the handicap principle: a signal is credible when it is costly to fake. The product applies that idea to verified identity, explicit permission grants, and payments users can review before committing. The feather-and-eye mark represents visible, inspectable trust rather than decoration alone.
+
+![Peacock Wallet screenshot](./screen.png)
 
 ## Why this project exists
 - Offer a trustworthy BSV wallet that speaks modern protocols (BRC-100, Wallet Wire) and handles identity, permissions, and simple recovery by design.
@@ -44,7 +46,7 @@ We love thoughtful contributions. A great PR usually:
 Please file bugs with clear repro steps and platform info. For security-related findings, contact us privately first.
 
 ### Design & UX
-- Stick to the User Wallet palette and typography (see `components/Theme.tsx`).
+- Stick to the Peacock Wallet palette and typography (see `components/Theme.tsx`).
 - Prefer accessible components and keyboard-friendly interactions.
 - Add concise comments only where logic isn’t obvious.
 

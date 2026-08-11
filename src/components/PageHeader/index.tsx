@@ -56,6 +56,7 @@ const PageHeader: FC<PageHeaderProps> = ({
               sx={styles.back_button}
               onClick={handleBack}
               size="large"
+              aria-label="Go back"
             >
               <ArrowBack />
             </IconButton>
@@ -76,7 +77,7 @@ const PageHeader: FC<PageHeaderProps> = ({
           {typeof subheading === 'string' ? (
             <Typography color="textSecondary">{subheading}</Typography>
           ) : (
-            <div style={{ height: '3em' }}>{subheading}</div>
+            <Box>{subheading}</Box>
           )}
         </Box>
         <Box>

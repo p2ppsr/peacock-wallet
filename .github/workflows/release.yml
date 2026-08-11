@@ -200,7 +200,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: 1
         run: |
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage --icon-file=AppDir/usr/share/icons/hicolor/128x128/apps/user-wallet.png --desktop-file=AppDir/usr/share/applications/user-wallet.desktop
-          mv User_Wallet-x86_64.AppImage user-wallet-x86_64.AppImage
+          mv Peacock_Wallet-x86_64.AppImage user-wallet-x86_64.AppImage
 
       - name: Import GPG Key for Linux Signing
         if: matrix.platform == 'ubuntu-22.04'

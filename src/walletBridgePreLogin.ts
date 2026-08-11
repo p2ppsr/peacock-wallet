@@ -138,7 +138,7 @@ export function buildPreLoginWalletResponse(req: PreLoginWalletRequest): PreLogi
       status: 503,
       body: jsonBody(errorBody(
         WALLET_NOT_AUTHENTICATED,
-        'UserWallet is running, but no wallet session is authenticated yet.',
+        'Peacock is running, but no wallet session is authenticated yet.',
         true
       ))
     }

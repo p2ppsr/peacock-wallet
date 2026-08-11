@@ -89,10 +89,10 @@ const Trust: React.FC = () => {
   return (
     <Box sx={styles.root}>
       <Typography variant='h1' color='textPrimary' sx={{ mb: 2 }}>
-        Trust
+        Trusted entities
       </Typography>
       <Typography variant='body1' color='textSecondary' sx={{ mb: 2 }}>
-        Give points to show which certifiers you trust the most to confirm the identity of counterparties. More points mean a higher priority.
+        Choose which certifiers Peacock may rely on when apps resolve people and organizations. Higher points give a certifier more influence.
       </Typography>
 
       {settingsLoading && (
@@ -102,9 +102,9 @@ const Trust: React.FC = () => {
       )}
 
       <Paper elevation={0} sx={{ ...styles.section, p: 3, bgcolor: 'background.paper' }}>
-        <Typography variant='h4' sx={{ mb: 2 }}>Trust Threshold</Typography>
+        <Typography variant='h4' sx={{ mb: 2 }}>Verification threshold</Typography>
         <Typography variant='body1' color='textSecondary' sx={{ mb: 2 }}>
-          You've given out a total of <b>{totalTrustPoints} {totalTrustPoints === 1 ? 'point' : 'points'}</b>. Set the minimum points any counterparty must have across your trust network to be shown in any apps you use.
+          You have assigned <b>{totalTrustPoints} {totalTrustPoints === 1 ? 'point' : 'points'}</b>. Set the minimum support an identity needs before Peacock treats it as verified.
         </Typography>
         <Box sx={styles.trust_threshold}>
           <Box sx={styles.slider_label_grid}>
@@ -121,9 +121,9 @@ const Trust: React.FC = () => {
       </Paper>
 
       <Paper elevation={0} sx={{ ...styles.section, p: 3, bgcolor: 'background.paper', mt: 3 }}>
-        <Typography variant='h4' sx={{ mb: 2 }}>Certifier Network</Typography>
+        <Typography variant='h4' sx={{ mb: 2 }}>Certifiers</Typography>
         <Typography variant='body1' color='textSecondary' sx={{ mb: 3 }}>
-          People, businesses, and websites will need endorsement by these certifiers to show up in your apps. Otherwise, you'll see them as "Unknown Identity".
+          Identities that do not meet your threshold remain visible as “Unknown identity” so you can make the final decision.
         </Typography>
 
         {/* UI Controls - Search and Add Buttons */}
@@ -148,7 +148,7 @@ const Trust: React.FC = () => {
             startIcon={<AddIcon />}
             sx={{ minWidth: '200px' }}
           >
-            Add Search Provider
+            Add certifier
           </Button>
         </Box>
         <Box flex={1}>

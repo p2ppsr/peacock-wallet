@@ -1,40 +1,30 @@
 import {
-  Settings as SettingsIcon,
-  Badge as IdentityIcon,
+  AppsRounded,
+  BadgeRounded,
+  HomeRounded,
+  PaymentsRounded,
+  SettingsRounded,
+  VerifiedUserRounded
 } from '@mui/icons-material'
-import PaymentIcon from '@mui/icons-material/Payment';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser'
 import {
+  Box,
+  Divider,
+  Drawer,
   List,
   ListItemButton,
   ListItemIcon,
   ListItemText,
-  Typography,
-  Drawer,
-  Box,
-  Divider
+  Stack,
+  Typography
 } from '@mui/material'
-import Profile from '../components/Profile'
 import React, { useContext, useEffect, useMemo, useRef } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import Logo from '../components/Logo'
+import Profile from '../components/Profile'
 import { UserContext } from '../UserContext'
 import { useBreakpoint } from '../utils/useBreakpoints'
-import HomeIcon from '@mui/icons-material/Home'
-// Custom styling for menu items
-const menuItemStyle = (isSelected: boolean) => ({
-  borderRadius: '8px',
-  margin: '4px 8px',
-  transition: 'all 0.2s ease',
-  '&:hover': {
-    backgroundColor: 'rgba(25, 118, 210, 0.1)',
-  },
-  ...(isSelected && {
-    backgroundColor: 'rgba(25, 118, 210, 0.12)',
-    '&:hover': {
-      backgroundColor: 'rgba(25, 118, 210, 0.2)',
-    },
-  }),
-})
+
+export const WALLET_NAV_WIDTH = 264
 
 interface MenuProps {
   menuOpen: boolean
@@ -42,275 +32,125 @@ interface MenuProps {
   menuRef: React.RefObject<HTMLDivElement>
 }
 
+const navItems = [
+  { label: 'Overview', path: '/dashboard/home', icon: HomeRounded, testId: 'wallet-nav-home', matches: ['/dashboard', '/dashboard/home'] },
+  { label: 'Apps', path: '/dashboard/apps', icon: AppsRounded, testId: 'wallet-nav-apps', matches: ['/dashboard/apps', '/dashboard/recent-apps', '/dashboard/app-catalog', '/dashboard/app/'] },
+  { label: 'Payments', path: '/dashboard/payments', icon: PaymentsRounded, testId: 'wallet-nav-payments', matches: ['/dashboard/payments', '/dashboard/transfer'] },
+  { label: 'Identity', path: '/dashboard/identity', icon: BadgeRounded, testId: 'wallet-nav-identity', matches: ['/dashboard/identity', '/dashboard/certificate/'] },
+  { label: 'Trusted entities', path: '/dashboard/trust', icon: VerifiedUserRounded, testId: 'wallet-nav-trust', matches: ['/dashboard/trust', '/dashboard/counterparty/'] },
+  { label: 'Settings', path: '/dashboard/settings', icon: SettingsRounded, testId: 'wallet-nav-settings', matches: ['/dashboard/settings'] }
+]
 
 export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
   const navigate = useNavigate()
   const location = useLocation()
   const breakpoints = useBreakpoint()
-  const { appName, appVersion } = useContext(UserContext)
-
+  const { appVersion } = useContext(UserContext)
   const pendingNavigationFrame = useRef<number | null>(null)
-  const pendingNavigationPath = useRef<string | null>(null)
-  const proofRunAttrs = (testId: string, ariaLabel: string) => ({
-    'aria-label': ariaLabel,
-    'data-testid': testId,
-    'data-proofrun': testId
-  })
-
-  // History.push wrapper
-  useEffect(() => {
-    return () => {
-      if (typeof window !== 'undefined' && pendingNavigationFrame.current !== null) {
-        window.cancelAnimationFrame(pendingNavigationFrame.current)
-      }
-      pendingNavigationFrame.current = null
-      pendingNavigationPath.current = null
-    }
-  }, [])
+  const isCompact = (breakpoints as { sm: boolean }).sm
 
   const navigation = useMemo(() => ({
     push: (path: string) => {
-      if (!path) {
+      if (location.pathname === path) {
+        if (isCompact) setMenuOpen(false)
         return
       }
-
-      const currentPath = location.pathname
-      const { sm } = breakpoints as { sm: boolean }
-
-      if (currentPath === path) {
-        if (sm) {
-          setMenuOpen(false)
-        }
-        return
-      }
-
-      if (typeof window === 'undefined') {
-        if (sm) {
-          setMenuOpen(false)
-        }
-        navigate(path)
-        return
-      }
-
-      pendingNavigationPath.current = path
 
       if (pendingNavigationFrame.current !== null) {
         window.cancelAnimationFrame(pendingNavigationFrame.current)
       }
-
       pendingNavigationFrame.current = window.requestAnimationFrame(() => {
+        navigate(path)
+        if (isCompact) setMenuOpen(false)
         pendingNavigationFrame.current = null
-        const destination = pendingNavigationPath.current
-        pendingNavigationPath.current = null
-
-        if (sm) {
-          setMenuOpen(false)
-        }
-
-        if (destination && location.pathname !== destination) {
-          navigate(destination)
-        }
       })
     }
-  }), [navigate, breakpoints, setMenuOpen])
+  }), [isCompact, location.pathname, navigate, setMenuOpen])
 
-  // First useEffect to handle breakpoint changes
   useEffect(() => {
-    // Explicitly cast breakpoints to avoid TypeScript error
-    const { sm } = breakpoints as { sm: boolean }
-    if (!sm) {
-      setMenuOpen(true)
-    } else {
-      setMenuOpen(false)
-    }
-  }, [breakpoints])
+    setMenuOpen(!isCompact)
+  }, [isCompact, setMenuOpen])
 
-  // Second useEffect to handle outside clicks
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false)
-      }
+  useEffect(() => () => {
+    if (pendingNavigationFrame.current !== null) {
+      window.cancelAnimationFrame(pendingNavigationFrame.current)
     }
-
-    if (menuOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-    } else {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-
-    // Cleanup
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [menuOpen])
-
-  const isPaymentsSelected = location.pathname === '/dashboard/payments' || location.pathname === '/dashboard/transfer'
-  const isHomeSelected = location.pathname === '/dashboard/home' || location.pathname === '/dashboard' || location.pathname === '/dashboard/'
+  }, [])
 
   return (
     <Drawer
-      anchor='left'
+      anchor="left"
       open={menuOpen}
-      variant='persistent'
+      variant={isCompact ? 'temporary' : 'persistent'}
       onClose={() => setMenuOpen(false)}
+      ModalProps={{ keepMounted: true }}
       sx={(theme) => ({
-        width: 320,
+        width: WALLET_NAV_WIDTH,
         flexShrink: 0,
         '& .MuiDrawer-paper': {
-          width: 320,
+          width: WALLET_NAV_WIDTH,
           boxSizing: 'border-box',
-          borderRight: '1px solid',
-          borderColor: theme.palette.divider,
-          boxShadow: 3,
+          borderRight: `1px solid ${theme.palette.divider}`,
+          borderRadius: 0,
           background: theme.palette.background.paper,
-          overflowX: 'hidden',
-          borderTopLeftRadius: 0,
-          borderBottomLeftRadius: 0,
-          borderTopRightRadius: theme.shape.borderRadius * 3,
-          borderBottomRightRadius: theme.shape.borderRadius * 3,
-        },
+          overflowX: 'hidden'
+        }
       })}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          p: 2
-        }}
-      >
-        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
-          <Profile />
-        </Box>
+      <Box ref={menuRef} sx={{ display: 'flex', flexDirection: 'column', height: '100%', p: 2 }}>
+        <Stack direction="row" alignItems="center" spacing={1.25} sx={{ px: 1, py: 1.25 }}>
+          <Box sx={{ width: 38, height: 38, color: 'primary.main', flexShrink: 0 }}>
+            <Logo title="Peacock Wallet" />
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight={750} lineHeight={1.15}>Peacock</Typography>
+            <Typography variant="caption" color="text.secondary">Identity &amp; payments</Typography>
+          </Box>
+        </Stack>
 
-        <Divider sx={{ mb: 2 }} />
+        <Box sx={{ my: 2 }}><Profile /></Box>
+        <Divider sx={{ mb: 1.5 }} />
 
-        <List component="nav" sx={{ mb: 2 }}>
-          <ListItemButton
-            onClick={() => navigation.push('/dashboard/home')}
-            selected={isHomeSelected}
-            sx={menuItemStyle(isHomeSelected)}
-            {...proofRunAttrs('wallet-nav-home', 'Home')}
-          >
-            <ListItemIcon sx={{ minWidth: 40, color: isHomeSelected ? 'primary.main' : 'inherit' }}>
-              <HomeIcon />
-            </ListItemIcon>
-            <ListItemText
-              primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={isHomeSelected ? 600 : 400}
-                >
-                  Home
-                </Typography>
-              }
-            />
-          </ListItemButton>
+        <List component="nav" aria-label="Peacock navigation" sx={{ p: 0 }}>
+          {navItems.map(({ label, path, icon: Icon, testId, matches }) => {
+            const selected = matches.some(match => match === '/dashboard'
+              ? location.pathname === match || location.pathname === '/dashboard/'
+              : location.pathname === match || location.pathname.startsWith(match))
 
-          <ListItemButton
-            onClick={() => navigation.push('/dashboard/identity')}
-            selected={location.pathname === '/dashboard/identity'}
-            sx={menuItemStyle(location.pathname === '/dashboard/identity')}
-            {...proofRunAttrs('wallet-nav-identity', 'Identity')}
-          >
-            <ListItemIcon sx={{ minWidth: 40, color: location.pathname === '/dashboard/identity' ? 'primary.main' : 'inherit' }}>
-              <IdentityIcon />
-            </ListItemIcon>
-            <ListItemText
-              primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={location.pathname === '/dashboard/identity' ? 600 : 400}
-                >
-                  Identity
-                </Typography>
-              }
-            />
-          </ListItemButton>
-
-          <ListItemButton
-            onClick={() => navigation.push('/dashboard/trust')}
-            selected={location.pathname === '/dashboard/trust'}
-            sx={menuItemStyle(location.pathname === '/dashboard/trust')}
-            {...proofRunAttrs('wallet-nav-trust', 'Trust')}
-          >
-            <ListItemIcon sx={{ minWidth: 40, color: location.pathname === '/dashboard/trust' ? 'primary.main' : 'inherit' }}>
-              <VerifiedUserIcon />
-            </ListItemIcon>
-            <ListItemText
-              primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={location.pathname === '/dashboard/trust' ? 600 : 400}
-                >
-                  Trust
-                </Typography>
-              }
-            />
-          </ListItemButton>
-
-          <ListItemButton
-            onClick={() => navigation.push('/dashboard/payments')}
-            selected={isPaymentsSelected}
-            sx={menuItemStyle(isPaymentsSelected)}
-            {...proofRunAttrs('wallet-nav-payments', 'Payments')}
-          >
-            <ListItemIcon sx={{ minWidth: 40, color: isPaymentsSelected ? 'primary.main' : 'inherit' }}>
-              <PaymentIcon />
-            </ListItemIcon>
-            <ListItemText
-              primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={isPaymentsSelected ? 600 : 400}
-                >
-                  Payments
-                </Typography>
-              }
-            />
-          </ListItemButton>
-
-          <ListItemButton
-            onClick={() => navigation.push('/dashboard/settings')}
-            selected={location.pathname === '/dashboard/settings'}
-            sx={menuItemStyle(location.pathname === '/dashboard/settings')}
-            {...proofRunAttrs('wallet-nav-settings', 'Settings')}
-          >
-            <ListItemIcon sx={{ minWidth: 40, color: location.pathname === '/dashboard/settings' ? 'primary.main' : 'inherit' }}>
-              <SettingsIcon />
-            </ListItemIcon>
-            <ListItemText
-              primary={
-                <Typography
-                  variant="body1"
-                  fontWeight={location.pathname === '/dashboard/settings' ? 600 : 400}
-                >
-                  Settings
-                </Typography>
-              }
-            />
-          </ListItemButton>
-
+            return (
+              <ListItemButton
+                key={path}
+                aria-label={label}
+                data-testid={testId}
+                data-proofrun={testId}
+                onClick={() => navigation.push(path)}
+                selected={selected}
+                sx={(theme) => ({
+                  borderRadius: 1.5,
+                  minHeight: 46,
+                  mb: 0.5,
+                  px: 1.25,
+                  color: selected ? 'text.primary' : 'text.secondary',
+                  '&.Mui-selected': {
+                    bgcolor: theme.palette.mode === 'light' ? 'rgba(8,111,104,0.11)' : 'rgba(99,230,208,0.12)'
+                  },
+                  '&.Mui-selected:hover': {
+                    bgcolor: theme.palette.mode === 'light' ? 'rgba(8,111,104,0.16)' : 'rgba(99,230,208,0.18)'
+                  }
+                })}
+              >
+                <ListItemIcon sx={{ minWidth: 38, color: selected ? 'primary.main' : 'inherit' }}>
+                  <Icon fontSize="small" />
+                </ListItemIcon>
+                <ListItemText primary={label} primaryTypographyProps={{ fontWeight: selected ? 700 : 520 }} />
+              </ListItemButton>
+            )
+          })}
         </List>
 
-
-        <Box sx={{ mt: 'auto', mb: 2 }}>
-          <Typography
-            variant='caption'
-            color='textSecondary'
-            align='center'
-            sx={{
-              display: 'block',
-              mt: 2,
-              textAlign: 'center',
-              width: '100%',
-              opacity: 0.5,
-            }}
-          >
-            {appName} v{appVersion}
-            <br />
-            <i>Made with love by the Babbage Team</i>
+        <Box sx={{ mt: 'auto', px: 1, pt: 2 }}>
+          <Typography variant="caption" color="text.secondary">
+            Peacock Wallet v{appVersion}
           </Typography>
         </Box>
       </Box>

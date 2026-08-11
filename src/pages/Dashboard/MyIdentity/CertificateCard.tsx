@@ -184,10 +184,10 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
     <Card
       sx={(theme) => ({
         cursor: clickable ? 'pointer' : 'default',
-        transition: 'all 0.3s ease',
+        transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
         '&:hover': clickable
           ? {
-            boxShadow: 6,
+            boxShadow: 3,
             transform: 'translateY(-2px)'
           }
           : {},
@@ -196,7 +196,7 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
         display: 'flex',
         flexDirection: 'column',
         width: '100%',
-        borderRadius: 3,
+        borderRadius: 2,
         border: '1px solid',
         borderColor: alpha(theme.palette.primary.main, 0.18),
         background: `linear-gradient(150deg, ${alpha(theme.palette.primary.main, 0.05)} 0%, ${theme.palette.background.paper} 55%)`
@@ -204,20 +204,20 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
       onClick={handleClick}
       variant="outlined"
     >
-      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1 }}>
+      <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, flexGrow: 1, p: 2.25, '&:last-child': { pb: 2.25 } }}>
         {/* Revoke button - only shown when canRevoke is true */}
         {canRelinquish && (
           <Box
             sx={(theme) => ({
               position: 'absolute',
-              top: 8,
-              right: 8,
+              top: 10,
+              right: 10,
               zIndex: 1,
               display: 'inline-flex',
               alignItems: 'center',
               gap: 0.5,
               p: 0.5,
-              borderRadius: 3,
+              borderRadius: 1.5,
               border: '1px solid',
               borderColor: alpha(theme.palette.primary.main, 0.12),
               backgroundColor: alpha(theme.palette.background.paper, 0.6),

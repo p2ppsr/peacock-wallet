@@ -5,7 +5,7 @@ import { toast } from 'react-toastify';
 import { WalletContext } from '../../WalletContext';
 import { WalletSettings } from '@bsv/wallet-toolbox-client';
 
-type ModeOption = 'light' | 'dark';
+type ModeOption = 'light' | 'dark' | 'system';
 
 type ModeVisualTokens = {
   label: string;
@@ -34,7 +34,7 @@ const MODE_VISUAL_TOKENS: Record<ModeOption, ModeVisualTokens> = {
     backgroundColor: '#F4F6F8',
     backgroundImageLayers: [
       'radial-gradient(circle at 20% 18%, rgba(93,226,194,0.18), transparent 42%)',
-      'radial-gradient(circle at 78% 12%, rgba(255,155,115,0.18), transparent 36%)',
+      'radial-gradient(circle at 78% 12%, rgba(53,111,163,0.18), transparent 36%)',
       'linear-gradient(180deg, #F7F9FB 0%, #EDF2F7 100%)',
     ],
     backgroundBlendMode: 'normal, normal, normal',
@@ -46,19 +46,19 @@ const MODE_VISUAL_TOKENS: Record<ModeOption, ModeVisualTokens> = {
     accentMain: '#0E8A72',
     accentSoft: 'rgba(14,138,114,0.2)',
     accentContrast: '#F8FAFB',
-    accentGradient: 'linear-gradient(120deg, #0E8A72, #FF8A3D)',
+    accentGradient: 'linear-gradient(120deg, #0E8A72, #356FA3)',
     chipBackground: 'rgba(14,138,114,0.12)',
     buttonRestShadow: '0 12px 28px rgba(14,138,114,0.12)',
     buttonActiveShadow: '0 22px 44px rgba(14,138,114,0.18)',
-    focusRing: '0 0 0 4px rgba(255,138,61,0.18)',
-    previewIconBackground: 'linear-gradient(135deg, rgba(14,138,114,0.15), rgba(255,138,61,0.2))',
+    focusRing: '0 0 0 4px rgba(53,111,163,0.2)',
+    previewIconBackground: 'linear-gradient(135deg, rgba(14,138,114,0.15), rgba(53,111,163,0.2))',
   },
   dark: {
     label: 'Dark',
     backgroundColor: '#050A12',
     backgroundImageLayers: [
       'radial-gradient(circle at 16% 18%, rgba(93,226,194,0.2), transparent 34%)',
-      'radial-gradient(circle at 78% 12%, rgba(255,155,115,0.2), transparent 30%)',
+      'radial-gradient(circle at 78% 12%, rgba(121,184,238,0.2), transparent 30%)',
       'linear-gradient(180deg, #050A12 0%, #0B1422 100%)',
     ],
     backgroundBlendMode: 'normal, normal, normal',
@@ -70,12 +70,34 @@ const MODE_VISUAL_TOKENS: Record<ModeOption, ModeVisualTokens> = {
     accentMain: '#5DE2C2',
     accentSoft: 'rgba(93,226,194,0.25)',
     accentContrast: '#050A12',
-    accentGradient: 'linear-gradient(120deg, #3AC9AA, #FF9B73)',
+    accentGradient: 'linear-gradient(120deg, #3AC9AA, #79B8EE)',
     chipBackground: 'rgba(93,226,194,0.14)',
     buttonRestShadow: '0 18px 36px rgba(0, 0, 0, 0.55)',
     buttonActiveShadow: '0 28px 52px rgba(0, 0, 0, 0.65)',
     focusRing: '0 0 0 4px rgba(93,226,194,0.28)',
-    previewIconBackground: 'linear-gradient(135deg, rgba(93,226,194,0.18), rgba(255,155,115,0.2))',
+    previewIconBackground: 'linear-gradient(135deg, rgba(93,226,194,0.18), rgba(121,184,238,0.2))',
+  },
+  system: {
+    label: 'System',
+    backgroundColor: '#10202B',
+    backgroundImageLayers: [
+      'linear-gradient(135deg, #F3F6F8 0%, #F3F6F8 49%, #071019 51%, #071019 100%)',
+    ],
+    backgroundBlendMode: 'normal',
+    textPrimary: '#F2F7FA',
+    textSecondary: '#C2CED6',
+    surfaceGradient: 'linear-gradient(135deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.96) 49%, rgba(16,28,39,0.96) 51%, rgba(16,28,39,0.96) 100%)',
+    surfaceBorderColor: 'rgba(99,230,208,0.35)',
+    surfaceShadow: '0 20px 44px rgba(0,0,0,0.24)',
+    accentMain: '#63E6D0',
+    accentSoft: 'rgba(99,230,208,0.18)',
+    accentContrast: '#071019',
+    accentGradient: 'linear-gradient(120deg, #49CDB7, #659FD0)',
+    chipBackground: 'rgba(99,230,208,0.14)',
+    buttonRestShadow: '0 12px 26px rgba(0,0,0,0.18)',
+    buttonActiveShadow: '0 18px 36px rgba(0,0,0,0.28)',
+    focusRing: '0 0 0 4px rgba(99,230,208,0.24)',
+    previewIconBackground: 'linear-gradient(135deg, #F3F6F8 0%, #F3F6F8 49%, #071019 51%, #071019 100%)',
   },
 };
 
@@ -115,10 +137,12 @@ const Welcome: React.FC = () => {
     EUR: '€9.15',
     GBP: '£7.86',
   };
-  const modes: ModeOption[] = ['light', 'dark'];
+  const modes: ModeOption[] = ['system', 'light', 'dark'];
 
   const [selectedTheme, setSelectedTheme] = useState<ModeOption>(
-    settings?.theme?.mode === 'dark' ? 'dark' : 'light'
+    settings?.theme?.mode === 'dark' || settings?.theme?.mode === 'light'
+      ? settings.theme.mode
+      : 'system'
   );
   const [selectedCurrency, setSelectedCurrency] = useState<string>(settings?.currency || 'USD');
 
@@ -190,10 +214,10 @@ const Welcome: React.FC = () => {
         <Grid container direction="column" alignItems="center" spacing={3}>
           <Grid item xs={12}>
             <Typography variant="h1" paragraph sx={{ color: tokens.textPrimary }}>
-              Welcome to User Wallet
+              Welcome to Peacock
             </Typography>
             <Typography variant="h4" sx={{ color: tokens.textPrimary, opacity: 0.92 }}>
-              Tune your preferences before stepping into the new workspace.
+              Choose how Peacock should look and display your balance. You can change these later.
             </Typography>
             <Typography
               paragraph
@@ -216,6 +240,7 @@ const Welcome: React.FC = () => {
               return (
                 <Grid item key={mode}>
                   <Button
+                    aria-pressed={isSelected}
                     onClick={() => handleThemeChange(mode)}
                     sx={{
                       width: { xs: 140, sm: 160 },
@@ -340,7 +365,7 @@ const Welcome: React.FC = () => {
                 <LinearProgress color="primary" />
               ) : (
                 <Button color="primary" variant="contained" size="large" onClick={showDashboard}>
-                  View Dashboard
+                  Continue
                 </Button>
               )}
             </Grid>
