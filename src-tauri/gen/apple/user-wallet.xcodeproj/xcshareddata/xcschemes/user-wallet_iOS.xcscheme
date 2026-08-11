@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "8C0956E12669C10F9A091EFC"
-               BuildableName = "User Wallet.app"
+               BuildableName = "Peacock Wallet.app"
                BlueprintName = "user-wallet_iOS"
                ReferencedContainer = "container:user-wallet.xcodeproj">
             </BuildableReference>
@@ -31,7 +31,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8C0956E12669C10F9A091EFC"
-            BuildableName = "User Wallet.app"
+            BuildableName = "Peacock Wallet.app"
             BlueprintName = "user-wallet_iOS"
             ReferencedContainer = "container:user-wallet.xcodeproj">
          </BuildableReference>
@@ -66,7 +66,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8C0956E12669C10F9A091EFC"
-            BuildableName = "User Wallet.app"
+            BuildableName = "Peacock Wallet.app"
             BlueprintName = "user-wallet_iOS"
             ReferencedContainer = "container:user-wallet.xcodeproj">
          </BuildableReference>
@@ -95,7 +95,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "8C0956E12669C10F9A091EFC"
-            BuildableName = "User Wallet.app"
+            BuildableName = "Peacock Wallet.app"
             BlueprintName = "user-wallet_iOS"
             ReferencedContainer = "container:user-wallet.xcodeproj">
          </BuildableReference>

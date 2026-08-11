@@ -176,27 +176,27 @@ export function AppThemeProvider({ children }: ThemeProps) {
 
     const paletteBase = isLight
       ? {
-        primary: { main: '#0E8A72', contrastText: '#F8FAFB' },
-        secondary: { main: '#FF8A3D', contrastText: '#0C111A' },
-        warning: { main: '#E6B230', contrastText: '#0C111A' },
-        background: { default: '#F4F6F8', paper: '#FFFFFF' },
-        text: { primary: '#0F1624', secondary: '#4B5565' },
+        primary: { main: '#086F68', contrastText: '#FFFFFF' },
+        secondary: { main: '#356FA3', contrastText: '#FFFFFF' },
+        warning: { main: '#B97805', contrastText: '#FFFFFF' },
+        background: { default: '#F3F6F8', paper: '#FFFFFF' },
+        text: { primary: '#10202B', secondary: '#526371' },
       }
       : {
-        primary: { main: '#5DE2C2', contrastText: '#050A12' },
-        secondary: { main: '#FF9B73', contrastText: '#0B111A' },
-        warning: { main: '#F2C562', contrastText: '#050A12' },
-        background: { default: '#050A12', paper: 'rgba(12,18,30,0.94)' },
-        text: { primary: '#EAF1FB', secondary: '#9FB3C5' },
+        primary: { main: '#63E6D0', contrastText: '#041312' },
+        secondary: { main: '#79B8EE', contrastText: '#07131C' },
+        warning: { main: '#F3BD5B', contrastText: '#161004' },
+        background: { default: '#071019', paper: '#101C27' },
+        text: { primary: '#F2F7FA', secondary: '#A9BAC6' },
       };
 
     const atmosphere = isLight
-      ? 'radial-gradient(circle at 18% 20%, rgba(93,226,194,0.18), transparent 35%), radial-gradient(circle at 82% 12%, rgba(255,155,115,0.22), transparent 32%), radial-gradient(circle at 75% 80%, rgba(14,138,114,0.14), transparent 35%)'
-      : 'radial-gradient(circle at 18% 15%, rgba(93,226,194,0.16), transparent 32%), radial-gradient(circle at 80% 10%, rgba(255,155,115,0.2), transparent 30%), radial-gradient(circle at 72% 78%, rgba(14,138,114,0.16), transparent 36%)';
+      ? 'radial-gradient(circle at 10% 10%, rgba(8,111,104,0.11), transparent 34%), radial-gradient(circle at 88% 12%, rgba(53,111,163,0.1), transparent 30%)'
+      : 'radial-gradient(circle at 12% 10%, rgba(99,230,208,0.1), transparent 32%), radial-gradient(circle at 88% 12%, rgba(121,184,238,0.1), transparent 30%)';
 
     const surfaceGradient = isLight
-      ? 'linear-gradient(150deg, rgba(255,255,255,0.96), rgba(242,246,251,0.94))'
-      : 'linear-gradient(150deg, rgba(12,18,30,0.94), rgba(15,24,36,0.9))';
+      ? 'linear-gradient(160deg, #FFFFFF, #F8FAFB)'
+      : 'linear-gradient(160deg, #101C27, #0D1822)';
 
     return createTheme({
       approvals: {
@@ -210,7 +210,7 @@ export function AppThemeProvider({ children }: ThemeProps) {
         ...paletteBase,
       },
       typography: {
-        fontFamily: '"Sora","Inter","Helvetica Neue","Helvetica","Arial",sans-serif',
+        fontFamily: 'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         h1: {
           fontWeight: 700,
           fontSize: '2.7rem',
@@ -251,13 +251,25 @@ export function AppThemeProvider({ children }: ThemeProps) {
               backgroundColor: `${paletteBase.primary.main}33`,
               color: paletteBase.text.primary,
             },
+            ':focus-visible': {
+              outline: `3px solid ${paletteBase.primary.main}`,
+              outlineOffset: '3px',
+            },
+            '@media (prefers-reduced-motion: reduce)': {
+              '*, *::before, *::after': {
+                animationDuration: '0.01ms !important',
+                animationIterationCount: '1 !important',
+                scrollBehavior: 'auto !important',
+                transitionDuration: '0.01ms !important',
+              },
+            },
           },
         },
         MuiButton: {
           styleOverrides: {
             root: {
               textTransform: 'none',
-              borderRadius: 999,
+              borderRadius: 12,
               paddingInline: '1.45rem',
               paddingBlock: '0.7rem',
               transition: 'transform 180ms ease, box-shadow 180ms ease, background 200ms ease',
@@ -270,8 +282,8 @@ export function AppThemeProvider({ children }: ThemeProps) {
               },
               '&.MuiButton-contained': {
                 backgroundImage: isLight
-                  ? 'linear-gradient(120deg, #0E8A72, #FF8A3D)'
-                  : 'linear-gradient(120deg, #3AC9AA, #FF9B73)',
+                  ? 'linear-gradient(120deg, #086F68, #356FA3)'
+                  : 'linear-gradient(120deg, #49CDB7, #659FD0)',
                 color: '#FFFFFF',
                 boxShadow: isLight
                   ? '0 10px 24px rgba(14,138,114,0.25)'
@@ -302,11 +314,10 @@ export function AppThemeProvider({ children }: ThemeProps) {
           styleOverrides: {
             root: {
               backgroundImage: surfaceGradient,
-              backdropFilter: 'blur(14px)',
-              borderRadius: 28,
+              borderRadius: 16,
               boxShadow: isLight
-                ? '0 24px 48px rgba(15, 22, 36, 0.12)'
-                : '0 24px 52px rgba(0,0,0,0.68)',
+                ? '0 12px 30px rgba(16, 32, 43, 0.08)'
+                : '0 16px 34px rgba(0,0,0,0.34)',
               border: `1px solid ${isLight ? 'rgba(14,138,114,0.18)' : 'rgba(255,255,255,0.08)'}`,
             },
           },
@@ -314,17 +325,16 @@ export function AppThemeProvider({ children }: ThemeProps) {
         MuiCard: {
           styleOverrides: {
             root: {
-              borderRadius: 24,
+              borderRadius: 16,
               border: `1px solid ${isLight ? 'rgba(14,138,114,0.16)' : 'rgba(255,255,255,0.1)'}`,
               backgroundImage: surfaceGradient,
-              backdropFilter: 'blur(12px)',
             },
           },
         },
         MuiAppBar: {
           styleOverrides: {
             root: {
-              borderRadius: 20,
+              borderRadius: 14,
               margin: '16px',
               backgroundImage: isLight
                 ? 'linear-gradient(120deg, #0F1624, #0E8A72)'
@@ -346,7 +356,7 @@ export function AppThemeProvider({ children }: ThemeProps) {
         MuiOutlinedInput: {
           styleOverrides: {
             root: {
-              borderRadius: 18,
+              borderRadius: 12,
               backgroundColor: isLight ? 'rgba(255,255,255,0.95)' : 'rgba(5,8,23,0.7)',
               '& fieldset': {
                 borderColor: isLight ? 'rgba(14,138,114,0.25)' : 'rgba(93,226,194,0.25)',
@@ -391,7 +401,7 @@ export function AppThemeProvider({ children }: ThemeProps) {
         MuiDialog: {
           styleOverrides: {
             paper: {
-              borderRadius: 28,
+              borderRadius: 18,
               backgroundImage: surfaceGradient,
               border: `1px solid ${isLight ? 'rgba(14,138,114,0.14)' : 'rgba(255,255,255,0.12)'}`,
               boxShadow: isLight
@@ -417,13 +427,13 @@ export function AppThemeProvider({ children }: ThemeProps) {
           },
         },
       },
-      shape: { borderRadius: 18 },
+      shape: { borderRadius: 12 },
       templates: {
         page_wrap: {
           maxWidth: 'min(1440px, 100vw)',
           margin: 'auto',
           boxSizing: 'border-box',
-          padding: '56px',
+          padding: 'clamp(20px, 4vw, 48px)',
         },
         subheading: {
           textTransform: 'uppercase',

@@ -67,7 +67,7 @@ const RecoveryKeyHandler: FC = () => {
   }
 
   const handleDownload = async (): Promise<void> => {
-    const recoveryKeyData = `User Wallet Recovery Key:\n\n${recoveryKey}\n\nSaved: ${new Date()}`
+    const recoveryKeyData = `Peacock Wallet Recovery Key:\n\n${recoveryKey}\n\nSaved: ${new Date()}`
     try {
       // Create a blob from the text data
       const blob = new Blob([recoveryKeyData], { type: 'text/plain' })
@@ -78,7 +78,7 @@ const RecoveryKeyHandler: FC = () => {
       // Create and configure a download link
       const link = document.createElement('a')
       link.href = url
-      link.download = 'User Wallet Recovery Key.txt'
+      link.download = 'Peacock Wallet Recovery Key.txt'
       
       // Append to document, trigger click, and cleanup
       document.body.appendChild(link)

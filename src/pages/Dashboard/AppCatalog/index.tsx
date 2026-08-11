@@ -211,7 +211,7 @@ const AppCatalog: React.FC = () => {
         <>
           <PageHeader
             title="App Catalog"
-            subheading="Discover experiences built for your User Wallet"
+            subheading="Discover experiences built for your Peacock Wallet"
             icon=""
             buttonTitle="Add App"
             buttonIcon={<AddIcon />}

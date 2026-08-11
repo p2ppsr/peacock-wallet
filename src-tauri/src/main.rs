@@ -433,7 +433,7 @@ fn pre_listener_bridge_response(path: &str) -> Response<Body> {
             StatusCode::SERVICE_UNAVAILABLE,
             serde_json::json!({
                 "code": "WALLET_BRIDGE_NOT_READY",
-                "message": "UserWallet is starting or no wallet bridge listener is ready yet.",
+                "message": "Peacock is starting or no wallet bridge listener is ready yet.",
                 "retryable": true,
                 "walletReady": false
             }),
@@ -556,7 +556,7 @@ async fn handle_wallet_qa_request(
             StatusCode::INTERNAL_SERVER_ERROR,
             serde_json::json!({
                 "code": "WALLET_QA_EMIT_FAILED",
-                "message": "UserWallet could not deliver the wallet QA decision to the frontend.",
+                "message": "Peacock could not deliver the wallet QA decision to the frontend.",
                 "retryable": true
             }),
         ));
@@ -671,7 +671,7 @@ async fn handle_bridge_request(
                 StatusCode::GATEWAY_TIMEOUT,
                 serde_json::json!({
                     "code": "WALLET_BRIDGE_RESPONSE_DROPPED",
-                    "message": "UserWallet stopped handling the wallet request before responding.",
+                    "message": "Peacock stopped handling the wallet request before responding.",
                     "retryable": true
                 }),
             ))
@@ -1003,7 +1003,7 @@ fn main() {
                             MAIN_WINDOW_NAME,
                             WebviewUrl::default(),
                         )
-                        .title("User Wallet")
+                        .title("Peacock Wallet")
                         .build();
                     }
                 });
@@ -1032,7 +1032,7 @@ fn main() {
                     .menu(&tray_menu)
                     .icon(tray_img)
                     .show_menu_on_left_click(true)
-                    .tooltip("User Wallet")
+                    .tooltip("Peacock Wallet")
                     // Only tray menu item = Quit
                     .on_menu_event(|app, ev| {
                         match ev.id() {

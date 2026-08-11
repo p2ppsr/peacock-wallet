@@ -1,7 +1,7 @@
 {
   "name": "user-wallet",
   "private": true,
-  "version": "0.1.26",
+  "version": "0.7.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

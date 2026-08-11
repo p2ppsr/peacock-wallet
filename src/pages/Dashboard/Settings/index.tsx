@@ -33,7 +33,7 @@ import {
 
 const Settings: React.FC = () => {
   const { settings, updateSettings } = useContext(WalletContext)
-  const { pageLoaded } = useContext(UserContext)
+  const { pageLoaded, appVersion } = useContext(UserContext)
   const theme = useTheme()
   const navigate = useNavigate()
   const [settingsLoading, setSettingsLoading] = useState(false)
@@ -189,10 +189,10 @@ const Settings: React.FC = () => {
       }}
     >
       <Typography variant="h1" color="textPrimary" sx={{ mb: 2 }}>
-        User Settings
+        Settings
       </Typography>
       <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-        Adjust your preferences to customize your experience.
+        Control Peacock's appearance, privacy, recovery material, and advanced behavior.
       </Typography>
 
       {settingsLoading && (
@@ -202,25 +202,8 @@ const Settings: React.FC = () => {
       )}
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4 }}>
-        <Typography variant="h4" sx={{ mb: 2 }}>
-          Advanced Settings
-        </Typography>
-        <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
-          Manage session settings and your default currency.
-        </Typography>
-        <Button
-          variant="outlined"
-          disabled={settingsLoading}
-          onClick={() => navigate('/dashboard/settings/advanced')}
-          sx={{ textTransform: 'none' }}
-        >
-          Open Advanced Settings
-        </Button>
-      </Paper>
-
-      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4 }}>
         <Typography variant="h4" sx={{ mb: 1 }}>
-          Diagnostics & Crash Reports
+          Privacy & diagnostics
         </Typography>
         <Typography variant="body1" color="textSecondary" sx={{ mb: 1 }}>
           Help us find startup, update, wallet connection, and unexpected app failures.
@@ -250,7 +233,7 @@ const Settings: React.FC = () => {
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper' }}>
         <Typography variant="h4" sx={{ mb: 2 }}>
-          Choose Your Theme
+          Appearance
         </Typography>
         <Typography variant="body1" color="textSecondary" sx={{ mb: 3 }}>
           Select a theme that's comfortable for your eyes.
@@ -262,6 +245,7 @@ const Settings: React.FC = () => {
             return (
               <Grid2 key={themeOption}>
                 <Button
+                  aria-pressed={isSelected}
                   onClick={() => handleThemeChange(themeOption)}
                   disabled={settingsLoading}
                   sx={{
@@ -338,6 +322,29 @@ const Settings: React.FC = () => {
             No keys available yet. Unlock your wallet through the greeter to save your phrase or hex key locally.
           </Typography>
         )}
+      </Paper>
+
+      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4 }}>
+        <Typography variant="h4" sx={{ mb: 1 }}>
+          Advanced
+        </Typography>
+        <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+          Manage currency, wallet sessions, storage, and developer-oriented controls.
+        </Typography>
+        <Button
+          variant="outlined"
+          disabled={settingsLoading}
+          onClick={() => navigate('/dashboard/settings/advanced')}
+        >
+          Open advanced settings
+        </Button>
+      </Paper>
+
+      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4 }}>
+        <Typography variant="h4" sx={{ mb: 1 }}>About Peacock</Typography>
+        <Typography variant="body1" color="textSecondary">
+          Peacock Wallet v{appVersion}. Your identity and payments wallet for BRC-100 apps.
+        </Typography>
       </Paper>
 
       <Dialog

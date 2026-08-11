@@ -1,13 +1,15 @@
 import { useState, useEffect, useContext, useCallback, useRef } from 'react'
 import AmountDisplay from './AmountDisplay'
-import { Skeleton, Stack, Typography } from '@mui/material'
+import { Box, IconButton, Skeleton, Stack, Tooltip, Typography } from '@mui/material'
 import { WalletContext } from '../WalletContext'
+import { RefreshRounded, VisibilityOffRounded, VisibilityRounded } from '@mui/icons-material'
 
 const Profile = () => {
   const { managers, adminOriginator } = useContext(WalletContext)
   const [accountBalance, setAccountBalance] = useState<number | null>(null)
   const [balanceLoading, setBalanceLoading] = useState(true)
   const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const [balanceVisible, setBalanceVisible] = useState(true)
 
   const refreshBalance = useCallback(async () => {
     try {
@@ -71,22 +73,38 @@ const Profile = () => {
     }
   }, [])
 
-  return (<Stack alignItems="center">
-    <Typography variant='h5' color='textSecondary' align='center'>
-      Your Balance
-    </Typography>
-    <Typography
-      onClick={() => refreshBalance()}
-      color='textPrimary'
-      variant='h2'
-      align='center'
-      style={{ cursor: 'pointer' }}
-    >
-      {!managers?.permissionsManager || balanceLoading
-        ? <Skeleton width={120} />
-        : <AmountDisplay abbreviate>{accountBalance}</AmountDisplay>}
-    </Typography>
-  </Stack>)
+  return (
+    <Stack alignItems="stretch" spacing={0.5} sx={{ px: 1 }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between">
+        <Typography variant="overline" color="text.secondary" fontWeight={700} letterSpacing="0.08em">
+          Balance
+        </Typography>
+        <Box>
+          <Tooltip title={balanceVisible ? 'Hide balance' : 'Show balance'}>
+            <IconButton
+              size="small"
+              aria-label={balanceVisible ? 'Hide balance' : 'Show balance'}
+              onClick={() => setBalanceVisible(visible => !visible)}
+            >
+              {balanceVisible ? <VisibilityOffRounded fontSize="small" /> : <VisibilityRounded fontSize="small" />}
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Refresh balance">
+            <IconButton size="small" aria-label="Refresh balance" onClick={() => void refreshBalance()}>
+              <RefreshRounded fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      </Stack>
+      <Typography color="text.primary" variant="h5" fontWeight={750} aria-live="polite">
+        {!managers?.permissionsManager || balanceLoading
+          ? <Skeleton width={120} />
+          : balanceVisible
+            ? <AmountDisplay abbreviate>{accountBalance}</AmountDisplay>
+            : '••••••'}
+      </Typography>
+    </Stack>
+  )
 }
 
 export default Profile

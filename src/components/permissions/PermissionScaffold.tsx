@@ -29,10 +29,9 @@ const surfaceBase: SxProps<Theme> = {
   p: 2,
   borderRadius: 2,
   border: '1px solid',
-  borderColor: 'rgba(255,255,255,0.08)',
-  background: 'linear-gradient(145deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015))',
-  boxShadow: '0 18px 50px rgba(0,0,0,0.35)',
-  backdropFilter: 'blur(6px)'
+  borderColor: 'divider',
+  bgcolor: 'background.paper',
+  boxShadow: 'none'
 }
 
 /** Shared surface styling for dark, elevated panels */
@@ -53,11 +52,12 @@ export const InfoRow = ({ label, value, muted }: InfoRowProps) => (
       py: 1.25,
       px: 1,
       borderRadius: 1.5,
-      background: 'rgba(255,255,255,0.02)',
-      border: '1px solid rgba(255,255,255,0.05)'
+      backgroundColor: 'action.hover',
+      border: '1px solid',
+      borderColor: 'divider'
     }}
   >
-    <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: 0.8, color: muted ? 'text.secondary' : 'rgba(255,255,255,0.75)' }}>
+    <Typography variant="caption" sx={{ textTransform: 'uppercase', letterSpacing: 0.8, color: 'text.secondary' }}>
       {label}
     </Typography>
     <Typography
@@ -89,7 +89,7 @@ export const PermissionHeader = ({ appDomain, contextLine, gradient }: Permissio
         display: 'flex',
         alignItems: 'center',
         gap: 2,
-        boxShadow: '0 18px 50px rgba(0,0,0,0.4)',
+        boxShadow: '0 12px 30px rgba(0,0,0,0.18)',
         position: 'relative',
         overflow: 'hidden',
         border: '1px solid rgba(255,255,255,0.15)'
@@ -125,12 +125,7 @@ export const PermissionHeader = ({ appDomain, contextLine, gradient }: Permissio
 
 /** Compact card used to explain what the app wants */
 export const RequestCard = ({ title, body }: RequestCardProps) => (
-  <Surface
-    sx={{
-      mt: 1,
-      background: 'linear-gradient(145deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02))'
-    }}
-  >
+  <Surface sx={{ mt: 1 }}>
     <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
       {title}
     </Typography>

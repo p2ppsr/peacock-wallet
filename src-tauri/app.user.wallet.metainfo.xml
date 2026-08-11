@@ -3,7 +3,7 @@
   <id>app.user.wallet</id>
   <metadata_license>PROPRIETARY</metadata_license>
   <project_license>PROPRIETARY</project_license>
-  <name>User Wallet</name>
+  <name>Peacock Wallet</name>
   <summary>Experience the future of apps</summary>
   <description>
     <p>
@@ -14,11 +14,11 @@
   <categories>
     <category>Utility</category>
   </categories>
-  <url type="homepage">https://github.com/p2ppsr/user-wallet</url>
+  <url type="homepage">https://github.com/p2ppsr/peacock-wallet</url>
   <provides>
     <binary>user-wallet</binary>
   </provides>
   <releases>
-    <release version="0.1.26" date="2026-08-07"/>
+    <release version="0.7.0" date="2026-08-11"/>
   </releases>
 </component>
