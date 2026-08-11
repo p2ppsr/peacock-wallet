@@ -5,8 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "predev": "npm run chaintracks:checkpoint",
     "dev-ui": "vite --config vite.config.dev-ui.ts",
-    "build": "tsc && vite build",
+    "predev-ui": "npm run chaintracks:checkpoint",
+    "build": "npm run chaintracks:checkpoint && tsc && vite build",
+    "chaintracks:checkpoint": "node scripts/prepare-chaintracks-checkpoint.mjs",
+    "chaintracks:checkpoint:verify": "node scripts/prepare-chaintracks-checkpoint.mjs --verify-manifest-only",
+    "chaintracks:release-gate": "node scripts/check-chaintracks-release-gate.mjs @bsv/wallet-toolbox-client",
     "test": "vitest run",
     "test:security": "node scripts/assert-wallet-security-gates.mjs",
     "test:marketing-site": "node scripts/check-marketing-site.mjs",
@@ -23,9 +28,9 @@
     "toolbox-dev": "node scripts/setup-toolbox-link.js && npm run tauri dev",
     "tauri-ui-dev": "tauri dev --config src-tauri/tauri.ui-dev.conf.json",
     "release-version": "node update-version.js",
-    "release": "npm version patch --no-git-tag-version && node update-version.js $(node -p \"require('./package.json').version\") && git push --follow-tags",
-    "release:minor": "npm version minor --no-git-tag-version && node update-version.js $(node -p \"require('./package.json').version\") && git push --follow-tags",
-    "release:major": "npm version major --no-git-tag-version && node update-version.js $(node -p \"require('./package.json').version\") && git push --follow-tags",
+    "release": "npm run chaintracks:release-gate && npm run chaintracks:checkpoint && npm version patch --no-git-tag-version && node update-version.js $(node -p \"require('./package.json').version\") && git push --follow-tags",
+    "release:minor": "npm run chaintracks:release-gate && npm run chaintracks:checkpoint && npm version minor --no-git-tag-version && node update-version.js $(node -p \"require('./package.json').version\") && git push --follow-tags",
+    "release:major": "npm run chaintracks:release-gate && npm run chaintracks:checkpoint && npm version major --no-git-tag-version && node update-version.js $(node -p \"require('./package.json').version\") && git push --follow-tags",
     "clean": "rm -rf node_modules dist src-tauri/target .vite .cache package-lock.json yarn.lock pnpm-lock.yaml && cd src-tauri && cargo clean || true"
   },
   "dependencies": {

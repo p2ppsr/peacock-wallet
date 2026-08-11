@@ -44,6 +44,7 @@ import { reconcileStoredKeyMaterial } from './utils/keyMaterial'
 import { listen } from '@tauri-apps/api/event'
 import type { ActivePromptSummary, WalletBridgeInspector } from './onWalletReady'
 import { reportDiagnosticError, reportDiagnosticEvent } from './diagnostics'
+import { localChaintracksManager } from './chaintracks/localChaintracks'
 
 // -----
 // Permission Configuration (User Wallet specific)
@@ -944,7 +945,11 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const keyDeriver = new CachedKeyDeriver(new PrivateKey(primaryKey));
       const storageManager = new WalletStorageManager(keyDeriver.identityKey);
       const signer = new WalletSigner(chain, keyDeriver as any, storageManager);
-      const services = new Services(chain);
+      const chainTracker = await localChaintracksManager.getChainTracker(chain)
+      const services = new Services({
+        ...Services.createDefaultOptions(chain),
+        chainTracker
+      } as any);
       const makeLogger = () => new WalletLogger()
       const wallet = new Wallet(signer, services, undefined, privilegedKeyManager, makeLogger);
       newManagers.settingsManager = wallet.settingsManager;

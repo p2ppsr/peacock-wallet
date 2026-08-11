@@ -21,6 +21,10 @@ const onWalletReady = read('src/onWalletReady.ts')
 const binaryBridge = read('src/binaryBridge.ts')
 const rustBinaryBridge = read('src-tauri/src/binary_bridge.rs')
 const tauriMain = read('src-tauri/src/main.rs')
+const chaintracks = read('src/chaintracks/localChaintracks.ts')
+const advancedSettings = read('src/pages/Dashboard/Settings/Advanced.tsx')
+const packageJson = JSON.parse(read('package.json'))
+const checkpoint = JSON.parse(read('config/chaintracks-checkpoint.json'))
 
 assertNotMatches(
   'config admin originator',
@@ -69,6 +73,23 @@ assertIncludes('binary bridge generation registration', binaryBridge, "invoke('r
 assertIncludes('binary bridge generation cleanup', binaryBridge, "invoke('clear_binary_handler', { generation })")
 assertIncludes('Rust generation-scoped pending request', rustBinaryBridge, 'generation: String')
 assertIncludes('Rust generation-scoped cleanup', rustBinaryBridge, 'request.generation != generation')
+
+assertIncludes('wallet chain tracker injection', walletContext, 'chainTracker')
+assertIncludes('local persistent ChainTracks', chaintracks, 'createIdbChaintracks')
+assertIncludes('local-first default', chaintracks, "mode: 'local-primary'")
+assertIncludes('independent fallback quorum', chaintracks, 'requiredFallbackAgreement: 2')
+assertIncludes('consistency quorum', chaintracks, 'requiredConsistencyAgreement: 2')
+assertIncludes('automatic recovery', chaintracks, 'autoRecover: true')
+assertIncludes('packaged checkpoint cache', chaintracks, 'bulkFileCache')
+assertIncludes('bounded bulk downloads', chaintracks, 'bulkFileDownloadBudget')
+assertIncludes('advanced local/remote mode', advancedSettings, 'value="local-primary"')
+assertIncludes('advanced header reset', advancedSettings, 'clearLocalData')
+if (checkpoint.checkpointHeight !== 899999 || checkpoint.files.length !== 9) {
+  failures.push('checkpoint: expected nine immutable files through height 899999')
+}
+if (!String(packageJson.scripts?.release || '').startsWith('npm run chaintracks:release-gate')) {
+  failures.push('release: missing upstream ChainTracks release gate')
+}
 
 if (failures.length > 0) {
   console.error('UserWallet security gate check failed:')

@@ -1,12 +1,16 @@
-import { useCallback, useContext, useMemo, useState } from 'react'
+import { useCallback, useContext, useMemo, useState, useSyncExternalStore } from 'react'
 import {
   Box,
   Button,
+  Chip,
+  FormControlLabel,
   LinearProgress,
   List,
   ListItemButton,
   ListItemText,
   Paper,
+  Radio,
+  RadioGroup,
   Typography
 } from '@mui/material'
 import Grid2 from '@mui/material/Grid2'
@@ -20,12 +24,19 @@ import {
   getCurrencyDisplayName,
   isSupportedFiatCurrency
 } from '../../../utils/currency'
+import { localChaintracksManager, type ChaintracksMode } from '../../../chaintracks/localChaintracks'
 
 const AdvancedSettings: React.FC = () => {
   const { settings, updateSettings, logout } = useContext(WalletContext)
   const navigate = useNavigate()
 
   const [settingsLoading, setSettingsLoading] = useState(false)
+  const [chainAction, setChainAction] = useState<string>()
+  const chainStatus = useSyncExternalStore(
+    localChaintracksManager.subscribe,
+    localChaintracksManager.getSnapshot,
+    localChaintracksManager.getSnapshot
+  )
   const selectedCurrency = useMemo(() => (settings?.currency || 'USD').toString().toUpperCase(), [settings?.currency])
 
   const handleCurrencyChange = useCallback(
@@ -62,6 +73,20 @@ const AdvancedSettings: React.FC = () => {
 
   const isSelectedFiat = isSupportedFiatCurrency(selectedCurrency)
 
+  const runChainAction = useCallback(async (name: string, action: () => Promise<void>) => {
+    setChainAction(name)
+    try {
+      await action()
+      toast.success(`Chain verification ${name} completed.`)
+    } catch (error: any) {
+      toast.error(error?.message || `Chain verification ${name} failed.`)
+    } finally {
+      setChainAction(undefined)
+    }
+  }, [])
+
+  const formatBytes = (bytes?: number) =>
+    bytes == null ? 'Not measured' : `${(bytes / (1024 * 1024)).toFixed(1)} MiB (device total)`
   return (
     <Box
       sx={{
@@ -170,6 +195,125 @@ const AdvancedSettings: React.FC = () => {
             )
           })}
         </Grid2>
+      </Paper>
+
+      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 3 }}>
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+          <Typography variant="h4">Device Chain Verification</Typography>
+          <Chip
+            size="small"
+            color={
+              chainStatus.phase === 'ready' && chainStatus.consistency !== 'diverged'
+                ? 'success'
+                : 'warning'
+            }
+            label={`${chainStatus.phase} · ${chainStatus.consistency}`}
+          />
+        </Box>
+        <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+          Verify proof of work against a persistent chain held on this device. A packaged checkpoint
+          through height {chainStatus.checkpointHeight.toLocaleString()} seeds the first run; new
+          headers remain synchronized in the background. Independent network references are used
+          only for consistency checks and exceptional fallback.
+        </Typography>
+
+        <RadioGroup
+          row
+          value={chainStatus.mode}
+          onChange={(event) =>
+            void runChainAction('mode change', () =>
+              localChaintracksManager.setMode(event.target.value as ChaintracksMode)
+            )
+          }
+        >
+          <FormControlLabel
+            value="local-primary"
+            control={<Radio />}
+            label="Local first (recommended)"
+          />
+          <FormControlLabel
+            value="remote-only"
+            control={<Radio />}
+            label="Remote compatibility mode"
+          />
+        </RadioGroup>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+            gap: 1,
+            my: 2
+          }}
+        >
+          <Typography variant="body2">Network: {chainStatus.chain}</Typography>
+          <Typography variant="body2">Active source: {chainStatus.activeSource}</Typography>
+          <Typography variant="body2">
+            Local height: {chainStatus.localHeight?.toLocaleString() ?? 'Bootstrapping'}
+          </Typography>
+          <Typography variant="body2">
+            Reference height: {chainStatus.referenceHeight?.toLocaleString() ?? 'Not checked'}
+          </Typography>
+          <Typography variant="body2">
+            Height lag: {chainStatus.heightLag ?? 'Not checked'}
+          </Typography>
+          <Typography variant="body2">Storage: {formatBytes(chainStatus.storageBytes)}</Typography>
+          <Typography
+            variant="body2"
+            sx={{ gridColumn: { sm: '1 / -1' }, overflowWrap: 'anywhere' }}
+          >
+            Local tip: {chainStatus.localTipHash ?? 'Not available'}
+          </Typography>
+          <Typography variant="body2" sx={{ gridColumn: { sm: '1 / -1' } }}>
+            Last check:{' '}
+            {chainStatus.checkedAt
+              ? new Date(chainStatus.checkedAt).toLocaleString()
+              : 'Not checked'}
+          </Typography>
+        </Box>
+
+        {chainStatus.lastError && (
+          <Typography variant="body2" color="error" sx={{ mb: 2, overflowWrap: 'anywhere' }}>
+            {chainStatus.lastError}
+          </Typography>
+        )}
+
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            variant="contained"
+            disabled={chainAction != null}
+            onClick={() => void runChainAction('sync', () => localChaintracksManager.syncNow())}
+          >
+            Sync now
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={chainAction != null}
+            onClick={() =>
+              void runChainAction('consistency check', () =>
+                localChaintracksManager.checkConsistency()
+              )
+            }
+          >
+            Check local tip
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            disabled={chainAction != null}
+            onClick={() => {
+              if (
+                window.confirm(
+                  'Clear downloaded headers and rebuild local chain state from the packaged checkpoint? Wallet keys and transaction data are not affected.'
+                )
+              ) {
+                void runChainAction('reset', () => localChaintracksManager.clearLocalData())
+              }
+            }}
+          >
+            Clear and rebuild headers
+          </Button>
+        </Box>
       </Paper>
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 3 }}>

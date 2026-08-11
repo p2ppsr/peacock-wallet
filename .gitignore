@@ -24,3 +24,7 @@ dist-ssr
 *.sw?
 /.windsurfrules
 /target
+
+# Materialized and hash-verified during release builds.
+public/chaintracks/*.headers
+public/chaintracks/checkpoint.json
