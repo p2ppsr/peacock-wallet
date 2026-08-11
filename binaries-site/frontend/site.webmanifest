@@ -1,0 +1,17 @@
+{
+  "name": "Peacock Wallet",
+  "short_name": "Peacock",
+  "description": "Identity and payments, made inspectable.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#061311",
+  "theme_color": "#071817",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

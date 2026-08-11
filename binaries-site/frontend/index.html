@@ -1,489 +1,400 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Peacock Wallet Downloads</title>
-  <style>
-    :root {
-      color-scheme: light dark;
-    }
-
-    body {
-      margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.6;
-      background: radial-gradient(circle at top, #123b40, #061018 58%);
-      color: #e6edf3;
-    }
-
-    .container {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 3.5rem 1.5rem 4rem;
-    }
-
-    .mobile-banner {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1rem;
-      background: rgba(56, 189, 248, 0.18);
-      color: #d5f5ff;
-      font-weight: 600;
-      text-align: center;
-      backdrop-filter: blur(12px);
-    }
-
-    .mobile-banner a {
-      color: #7dd3fc;
-      text-decoration: underline;
-    }
-
-    .hero {
-      text-align: center;
-      margin-bottom: 2.75rem;
-    }
-
-    .version-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 0.4rem;
-      padding: 0.35rem 0.75rem;
-      border-radius: 999px;
-      background: rgba(99, 230, 208, 0.14);
-      color: #8ff1df;
-      font-size: 0.95rem;
-      font-weight: 600;
-    }
-
-    .version-badge strong {
-      color: #d8fff7;
-    }
-
-    .release-date {
-      color: #b7c7e6;
-    }
-
-    .hero h1 {
-      margin: 1rem 0 0.75rem;
-      font-size: clamp(2rem, 4vw, 2.65rem);
-      letter-spacing: -0.02em;
-    }
-
-    .hero .intro {
-      margin: 0 auto;
-      max-width: 580px;
-      color: #9da5b4;
-      font-size: 1.05rem;
-    }
-
-    .hero-actions {
-      margin: 1.75rem auto 1rem;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: 1rem;
-    }
-
-    .cta {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      padding: 0.8rem 1.4rem;
-      border-radius: 999px;
-      font-weight: 600;
-      text-decoration: none;
-      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-    }
-
-    .cta.primary {
-      background: linear-gradient(135deg, #086f68, #356fa3);
-      color: #f8fbff;
-      box-shadow: 0 12px 30px rgba(8, 111, 104, 0.32);
-    }
-
-    .cta.primary:hover,
-    .cta.primary:focus-visible {
-      background: linear-gradient(135deg, #075e58, #2d5f8c);
-      transform: translateY(-1px);
-    }
-
-    .cta.secondary {
-      border: 1px solid rgba(148, 163, 184, 0.4);
-      color: #e6edf3;
-      background: rgba(15, 23, 42, 0.35);
-    }
-
-    .cta.secondary:hover,
-    .cta.secondary:focus-visible {
-      border-color: rgba(148, 163, 184, 0.8);
-      transform: translateY(-1px);
-    }
-
-    .detected {
-      margin: 0.5rem 0 0;
-      color: #8cc8ff;
-      font-size: 0.95rem;
-    }
-
-    .download-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 1.5rem;
-    }
-
-    .download-card {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      padding: 1.75rem 1.5rem;
-      background: rgba(13, 17, 23, 0.78);
-      border: 1px solid rgba(93, 114, 146, 0.38);
-      border-radius: 18px;
-      box-shadow: 0 24px 48px rgba(2, 6, 23, 0.35);
-      transition: border 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-    }
-
-    .download-card header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      margin-bottom: 0.75rem;
-    }
-
-    .download-card h2 {
-      margin: 0;
-      font-size: 1.4rem;
-    }
-
-    .platform-tag {
-      padding: 0.25rem 0.7rem;
-      border-radius: 999px;
-      background: rgba(99, 230, 208, 0.14);
-      color: #a6f5e7;
-      font-size: 0.85rem;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-
-    .download-card .summary {
-      margin: 0 0 1.25rem;
-      color: #9da5b4;
-      font-size: 0.98rem;
-    }
-
-    .download-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: grid;
-      gap: 0.75rem;
-    }
-
-    .resource {
-      display: block;
-      padding: 0.9rem 1rem;
-      border-radius: 12px;
-      background: rgba(8, 111, 104, 0.18);
-      color: #d7e3ff;
-      text-decoration: none;
-      font-weight: 600;
-      transition: transform 0.2s ease, background 0.2s ease, color 0.2s ease;
-    }
-
-    .resource small {
-      display: block;
-      margin-top: 0.2rem;
-      font-weight: 500;
-      font-size: 0.85rem;
-      color: rgba(215, 227, 255, 0.75);
-    }
-
-    .resource.secondary {
-      background: rgba(15, 23, 42, 0.45);
-      color: #cbd5f5;
-    }
-
-    .resource:hover,
-    .resource:focus-visible {
-      background: rgba(8, 111, 104, 0.44);
-      color: #f8fbff;
-      transform: translateY(-1px);
-    }
-
-    .resource.recommended {
-      background: linear-gradient(135deg, rgba(8, 111, 104, 0.82), rgba(53, 111, 163, 0.82));
-      color: #f8fbff;
-      box-shadow: 0 16px 40px rgba(59, 130, 246, 0.35);
-    }
-
-    .download-card.recommended {
-      border-color: rgba(99, 230, 208, 0.72);
-      box-shadow: 0 28px 56px rgba(8, 111, 104, 0.28);
-      transform: translateY(-2px);
-    }
-
-    .integrity {
-      margin-top: 1.25rem;
-      font-size: 0.95rem;
-      color: #9da5b4;
-    }
-
-    footer {
-      margin-top: 3rem;
-      font-size: 0.95rem;
-      color: #7b8491;
-      text-align: center;
-    }
-
-    footer a {
-      color: #8cc8ff;
-    }
-
-    code {
-      padding: 0.1rem 0.35rem;
-      border-radius: 6px;
-      background: rgba(15, 23, 42, 0.65);
-      color: #e6edf3;
-      font-family: ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, "Liberation Mono",
-        "Courier New", monospace;
-    }
-
-    @media (max-width: 680px) {
-      .container {
-        padding: 2.5rem 1.25rem 3rem;
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#071817" />
+    <meta
+      name="description"
+      content="Peacock Wallet is an open-source desktop wallet for private identity, reviewed payments, and explicit app permissions."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Peacock Wallet — Make trust visible" />
+    <meta
+      property="og:description"
+      content="Your identity, payments, and app permissions—clear, inspectable, and under your control."
+    />
+    <meta property="og:image" content="https://userwallet.getmetanet.com/peacock-dashboard.png" />
+    <meta property="og:url" content="https://userwallet.getmetanet.com/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href="https://userwallet.getmetanet.com/" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./site.css" />
+    <title>Peacock Wallet — Make trust visible</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Peacock Wallet",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "macOS, Windows, Linux",
+        "softwareVersion": "__RELEASE_VERSION__",
+        "description": "An open-source desktop wallet for private identity, reviewed payments, and explicit app permissions.",
+        "downloadUrl": "https://userwallet.getmetanet.com/#downloads",
+        "codeRepository": "https://github.com/p2ppsr/peacock-wallet",
+        "license": "https://github.com/p2ppsr/peacock-wallet/blob/master/LICENSE"
       }
+    </script>
+    <script defer src="./telemetry.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
 
-      .hero-actions {
-        flex-direction: column;
-      }
-
-      .hero .intro {
-        font-size: 1rem;
-      }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-
-      *,
-      *::before,
-      *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-      }
-    }
-  </style>
-</head>
-
-<body>
-  <main class="container">
-    <header class="hero">
-      <span class="version-badge">
-        Latest release: <strong>__RELEASE_VERSION__</strong>
-        <span class="release-date">Released <time datetime="__RELEASE_DATE__">__RELEASE_DATE__</time></span>
-      </span>
-      <h1>Download Peacock Wallet</h1>
-      <p class="intro">
-        Stay connected to your peers with the secure Peacock Wallet desktop app. Grab the build that matches
-        your device and get online in minutes.
-      </p>
-      <div class="hero-actions">
-        <a id="primary-download" class="cta primary" href="#downloads">Browse desktop downloads</a>
-      </div>
-      <p class="detected" id="detected-os" hidden>
-        Looks like you're on <span id="detected-os-name"></span>. We've highlighted the best match for you.
-      </p>
+    <header class="site-header" data-role="site-header">
+      <a class="brand" href="#top" aria-label="Peacock Wallet home">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M14 53C21 43 23 31 22 16c8 8 12 17 12 29" />
+          <path d="M32 52c1-13 7-25 18-35-2 15-8 26-18 35Z" />
+          <path d="M21 50c8-9 17-14 29-14-8 9-17 14-29 14Z" />
+          <path d="M28 53c-1-12 1-25 8-38 5 13 4 26-2 38" />
+          <circle cx="37" cy="22" r="5" />
+          <circle class="brand-eye" cx="37" cy="22" r="2" />
+        </svg>
+        <span>Peacock Wallet</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#why">Why Peacock</a>
+        <a href="#features">Features</a>
+        <a href="#downloads">Downloads</a>
+        <a
+          href="https://github.com/p2ppsr/peacock-wallet"
+          data-signal="marketing.github_clicked"
+          data-location="header"
+          >GitHub</a
+        >
+      </nav>
+      <a class="header-cta" href="#downloads">Download</a>
     </header>
 
-    <section id="downloads" class="download-grid">
-      <article class="download-card" data-card-os="macos">
-        <header>
-          <h2>macOS</h2>
-          <span class="platform-tag">macOS 11+</span>
-        </header>
-        <p class="summary">Install the native desktop build tailored for your Mac.</p>
-        <ul class="download-list">
-          <li>
-            <a class="resource" data-os="macos" data-arch="arm64" href="./user-wallet-macos-arm64.dmg" download>
-              Download for Apple&nbsp;Silicon
-              <small>DMG installer (arm64)</small>
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot"></span> Open source · Signed releases</p>
+          <h1 id="hero-title">Make trust <em>visible.</em></h1>
+          <p class="hero-lede">
+            Peacock Wallet puts identity, payments, and app permissions in one calm, inspectable place—so
+            you can see what you are approving before anything happens.
+          </p>
+          <div class="hero-actions">
+            <a
+              id="primary-download"
+              class="button button-primary"
+              href="#downloads"
+              data-signal="marketing.primary_cta_clicked"
+              data-location="hero"
+            >
+              Find your download
+              <span aria-hidden="true">↓</span>
             </a>
-          </li>
-          <li>
-            <a class="resource" data-os="macos" data-arch="x64" href="./user-wallet-macos-x64.dmg" download>
-              Download for Intel Macs
-              <small>DMG installer (x64)</small>
+            <a
+              class="button button-secondary"
+              href="https://github.com/p2ppsr/peacock-wallet"
+              data-signal="marketing.github_clicked"
+              data-location="hero"
+            >
+              View source on GitHub
+              <span aria-hidden="true">↗</span>
             </a>
-          </li>
-        </ul>
-      </article>
+          </div>
+          <ul class="proof-list" aria-label="Product assurances">
+            <li>Keys stay local</li>
+            <li>Permissions are explicit</li>
+            <li>Updates are signed</li>
+          </ul>
+        </div>
 
-      <article class="download-card" data-card-os="linux">
-        <header>
-          <h2>Linux</h2>
-          <span class="platform-tag">x86_64</span>
-        </header>
-        <p class="summary">
-          Grab the portable AppImage or verify the build with published signatures and hashes.
+        <div class="product-stage" aria-label="Peacock Wallet application preview">
+          <div class="stage-glow stage-glow-one"></div>
+          <div class="stage-glow stage-glow-two"></div>
+          <div class="app-window">
+            <div class="window-bar" aria-hidden="true">
+              <span></span><span></span><span></span>
+              <strong>Peacock Wallet</strong>
+            </div>
+            <img
+              src="./peacock-dashboard.png"
+              alt="Peacock Wallet overview showing quick actions and connected apps"
+              width="1245"
+              height="768"
+            />
+          </div>
+          <div class="floating-note floating-note-trust">
+            <span class="note-icon">✓</span>
+            <span><strong>Inspectable trust</strong>Every grant stays visible</span>
+          </div>
+          <div class="floating-note floating-note-control">
+            <span class="note-icon">⌁</span>
+            <span><strong>Your keys</strong>Local and recoverable</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="principle section" id="why" aria-labelledby="principle-title">
+        <div class="section-heading principle-heading">
+          <p class="eyebrow">The idea behind the name</p>
+          <h2 id="principle-title">A credible signal should be hard to fake.</h2>
+        </div>
+        <div class="principle-copy">
+          <p>
+            In the handicap principle, a signal earns trust because producing it carries a real cost. A
+            peacock’s display is the classic image: conspicuous, inspectable, and difficult to counterfeit.
+          </p>
+          <p>
+            Peacock Wallet applies that standard to software. Identity is cryptographically verifiable,
+            permissions are shown before they are granted, and payments are reviewed before they are signed.
+            Trust comes from evidence—not a promise hidden behind a button.
+          </p>
+        </div>
+      </section>
+
+      <section class="features section" id="features" aria-labelledby="features-title">
+        <div class="section-heading centered">
+          <p class="eyebrow">One wallet, fewer mysteries</p>
+          <h2 id="features-title">Know what is happening at every step.</h2>
+          <p>Peacock keeps powerful wallet capabilities understandable without hiding the important parts.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card feature-card-large">
+            <span class="feature-number">01</span>
+            <div class="feature-icon" aria-hidden="true">◎</div>
+            <h3>Private identity</h3>
+            <p>Present only the certificate or identity attribute an app needs. Your private keys never leave the wallet.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-number">02</span>
+            <div class="feature-icon" aria-hidden="true">↗</div>
+            <h3>Reviewed payments</h3>
+            <p>See the amount, destination, and requesting app before you authorize a payment.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-number">03</span>
+            <div class="feature-icon" aria-hidden="true">⌘</div>
+            <h3>Explicit permissions</h3>
+            <p>Understand what each connected app can do, then review or revoke access from one place.</p>
+          </article>
+          <article class="feature-card feature-card-wide">
+            <span class="feature-number">04</span>
+            <div>
+              <div class="feature-icon" aria-hidden="true">◇</div>
+              <h3>Open and inspectable</h3>
+              <p>The source, release history, signatures, and integrity files are public. You do not have to take our word for it.</p>
+            </div>
+            <a
+              class="text-link"
+              href="https://github.com/p2ppsr/peacock-wallet"
+              data-signal="marketing.github_clicked"
+              data-location="features"
+              >Inspect the source <span aria-hidden="true">↗</span></a
+            >
+          </article>
+        </div>
+      </section>
+
+      <section class="steps section" aria-labelledby="steps-title">
+        <div class="section-heading centered">
+          <p class="eyebrow">From download to useful</p>
+          <h2 id="steps-title">Start in three clear steps.</h2>
+        </div>
+        <ol class="step-list">
+          <li>
+            <span class="step-marker">1</span>
+            <h3>Install Peacock</h3>
+            <p>Choose the signed build for macOS, Windows, or Linux.</p>
+          </li>
+          <li>
+            <span class="step-marker">2</span>
+            <h3>Create or restore</h3>
+            <p>Generate a new recovery key or restore the wallet you already own.</p>
+          </li>
+          <li>
+            <span class="step-marker">3</span>
+            <h3>Connect deliberately</h3>
+            <p>Open compatible apps and approve only the permissions you understand.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="downloads section" id="downloads" aria-labelledby="downloads-title">
+        <div class="download-heading">
+          <div>
+            <p class="eyebrow">Desktop downloads</p>
+            <h2 id="downloads-title">Choose your platform.</h2>
+            <p id="detected-os" class="detected" hidden>
+              We detected <strong id="detected-os-name"></strong> and highlighted the closest match.
+            </p>
+          </div>
+          <div class="release-badge">
+            <span>Latest stable</span>
+            <strong>__RELEASE_VERSION__</strong>
+            <small>Released <time datetime="__RELEASE_DATE__">__RELEASE_DATE__</time></small>
+          </div>
+        </div>
+
+        <div class="download-grid">
+          <article class="download-card" data-card-os="macos">
+            <div class="platform-heading">
+              <div class="platform-icon" aria-hidden="true">●</div>
+              <div><h3>macOS</h3><p>macOS 11 or newer</p></div>
+            </div>
+            <div class="download-actions">
+              <a
+                class="download-link"
+                data-download
+                data-os="macos"
+                data-arch="arm64"
+                data-asset="dmg"
+                href="./user-wallet-macos-arm64.dmg"
+                download
+              >
+                <span>Apple Silicon</span><small>DMG · arm64</small><b aria-hidden="true">↓</b>
+              </a>
+              <a
+                class="download-link"
+                data-download
+                data-os="macos"
+                data-arch="x64"
+                data-asset="dmg"
+                href="./user-wallet-macos-x64.dmg"
+                download
+              >
+                <span>Intel Macs</span><small>DMG · x64</small><b aria-hidden="true">↓</b>
+              </a>
+            </div>
+          </article>
+
+          <article class="download-card" data-card-os="windows">
+            <div class="platform-heading">
+              <div class="platform-icon platform-icon-windows" aria-hidden="true">⊞</div>
+              <div><h3>Windows</h3><p>Windows 10 or newer</p></div>
+            </div>
+            <div class="download-actions">
+              <a
+                class="download-link"
+                data-download
+                data-os="windows"
+                data-arch="x64"
+                data-asset="msi"
+                href="./user-wallet-windows-x64.msi"
+                download
+              >
+                <span>MSI installer</span><small>Signed · x64</small><b aria-hidden="true">↓</b>
+              </a>
+              <a
+                class="download-link"
+                data-download
+                data-os="windows"
+                data-arch="x64"
+                data-asset="exe"
+                href="./user-wallet-windows-x64.exe"
+                download
+              >
+                <span>EXE installer</span><small>Signed · x64</small><b aria-hidden="true">↓</b>
+              </a>
+            </div>
+          </article>
+
+          <article class="download-card" data-card-os="linux">
+            <div class="platform-heading">
+              <div class="platform-icon platform-icon-linux" aria-hidden="true">◆</div>
+              <div><h3>Linux</h3><p>64-bit distributions</p></div>
+            </div>
+            <div class="download-actions">
+              <a
+                class="download-link"
+                data-download
+                data-os="linux"
+                data-arch="x86_64"
+                data-asset="appimage"
+                href="./user-wallet-linux-x86_64.AppImage"
+                download
+              >
+                <span>AppImage</span><small>Portable · x86_64</small><b aria-hidden="true">↓</b>
+              </a>
+              <a
+                class="download-link quiet"
+                data-signal="marketing.integrity_clicked"
+                data-location="linux-card"
+                href="./SHA256SUMS"
+                download
+              >
+                <span>SHA-256 checksums</span><b aria-hidden="true">↓</b>
+              </a>
+            </div>
+          </article>
+        </div>
+
+        <div class="integrity-panel">
+          <div>
+            <p class="eyebrow">Verify before you trust</p>
+            <h3>Every release has an audit trail.</h3>
+            <p>Linux packages include detached GPG signatures and signed checksums. App updates use Tauri signatures, and Windows installers are Authenticode-signed.</p>
+          </div>
+          <div class="integrity-links">
+            <a href="./SHA256SUMS" download data-signal="marketing.integrity_clicked" data-location="integrity">Checksums</a>
+            <a href="./SHA256SUMS.asc" download data-signal="marketing.integrity_clicked" data-location="integrity">Checksums signature</a>
+            <a href="./user-wallet-linux-x86_64.AppImage.asc" download data-signal="marketing.integrity_clicked" data-location="integrity">Linux signature</a>
+            <a
+              href="https://github.com/p2ppsr/peacock-wallet/releases"
+              data-signal="marketing.github_clicked"
+              data-location="integrity"
+              >Release history ↗</a
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="open-source section" aria-labelledby="open-title">
+        <div class="open-source-mark" aria-hidden="true">〈/〉</div>
+        <div>
+          <p class="eyebrow">Open source by design</p>
+          <h2 id="open-title">Trust the evidence. Improve the product.</h2>
+          <p>
+            Read the code, audit the release workflow, report a problem, or contribute a better idea. Peacock’s
+            public development history is part of its security model.
+          </p>
+        </div>
+        <div class="open-source-actions">
+          <a
+            class="button button-primary"
+            href="https://github.com/p2ppsr/peacock-wallet"
+            data-signal="marketing.github_clicked"
+            data-location="open-source"
+            >Explore GitHub <span aria-hidden="true">↗</span></a
+          >
+          <a
+            class="text-link"
+            href="https://github.com/p2ppsr/peacock-wallet/issues"
+            data-signal="marketing.github_clicked"
+            data-location="open-source-issues"
+            >Report an issue <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-brand">
+        <strong>Peacock Wallet</strong>
+        <p>Identity and payments, made inspectable.</p>
+      </div>
+      <div class="footer-links">
+        <a href="#downloads">Downloads</a>
+        <a href="https://github.com/p2ppsr/peacock-wallet">GitHub</a>
+        <a href="https://github.com/p2ppsr/peacock-wallet/releases">Releases</a>
+        <a href="#privacy">Privacy</a>
+      </div>
+      <div class="privacy-note" id="privacy">
+        <strong>Privacy-bounded measurement</strong>
+        <p>
+          This site sends privacy-bounded, session-only page and click signals to UserCom. It uses no analytics
+          cookies, wallet data, form data, or cross-session identifier, and respects Global Privacy Control and
+          Do Not Track.
         </p>
-        <ul class="download-list">
-          <li>
-            <a class="resource" data-os="linux" data-arch="x86_64" href="./user-wallet-linux-x86_64.AppImage"
-              download>
-              Download AppImage
-              <small>Desktop AppImage (x86_64)</small>
-            </a>
-          </li>
-          <li>
-            <a class="resource secondary" href="./user-wallet-linux-x86_64.AppImage.asc" download>
-              GPG Signature
-            </a>
-          </li>
-          <li>
-            <a class="resource secondary" href="./SHA256SUMS" download>SHA256 Checksums</a>
-          </li>
-          <li>
-            <a class="resource secondary" href="./SHA256SUMS.asc" download>Checksums Signature</a>
-          </li>
-        </ul>
-        <p class="integrity">
-          Verify the download with <code>sha256sum --check SHA256SUMS</code> and
-          <code>gpg --verify SHA256SUMS.asc</code>.
-        </p>
-      </article>
+      </div>
+      <p class="copyright">© <span id="copyright-year">2026</span> Peer-to-peer Privacy Systems Research, LLC.</p>
+    </footer>
 
-      <article class="download-card" data-card-os="windows">
-        <header>
-          <h2>Windows</h2>
-          <span class="platform-tag">Windows 10+</span>
-        </header>
-        <p class="summary">
-          Install the signed Windows builds for the best desktop experience.
-        </p>
-        <ul class="download-list">
-          <li>
-            <a class="resource" data-os="windows" data-arch="x64" href="./user-wallet-windows-x64.msi" download>
-              Download MSI Installer
-              <small>Digitally signed MSI (x64)</small>
-            </a>
-          </li>
-          <li>
-            <a class="resource" data-os="windows" data-arch="x64" href="./user-wallet-windows-x64.exe" download>
-              Download EXE Installer
-              <small>Signed NSIS installer (x64)</small>
-            </a>
-          </li>
-        </ul>
-        <p class="integrity">
-          Builds are signed with DigiCert Software Trust Manager certificates.
-        </p>
-      </article>
-    </section>
-  </main>
-
-  <script>
-    (function () {
-      const heroCta = document.getElementById("primary-download");
-      const detectedMessage = document.getElementById("detected-os");
-      const detectedName = document.getElementById("detected-os-name");
-      const resources = document.querySelectorAll("a.resource[data-os]");
-      const mobileBanner = document.querySelector('[data-role="mobile-banner"]');
-
-      const getPlatformInfo = () => {
-        const uaData = navigator.userAgentData;
-        const ua = navigator.userAgent || navigator.platform || "";
-        const platform = (navigator.platform || "").toLowerCase();
-        const arch = uaData && uaData.architecture ? uaData.architecture.toLowerCase() : "";
-
-        const isMobile = uaData ? uaData.mobile : /android|iphone|ipad|ipod/i.test(ua);
-        const isMac = /mac/i.test(platform) || /mac os x/i.test(ua);
-        const isIOS = /iphone|ipad|ipod/i.test(ua);
-        const isLinux = /linux|x11|bsd/i.test(platform) || /linux/i.test(ua);
-        const isWindows = /win/i.test(platform) || /windows/i.test(ua);
-
-        let detectedOS = null;
-        if (isIOS || (isMobile && isMac)) {
-          detectedOS = "ios";
-        } else if (isMac) {
-          detectedOS = "macos";
-        } else if (isLinux) {
-          detectedOS = "linux";
-        } else if (isWindows) {
-          detectedOS = "windows";
-        }
-
-        let detectedArch = null;
-        if (arch) {
-          if (arch.includes("arm")) detectedArch = "arm64";
-          if (arch.includes("x86") || arch.includes("amd64") || arch.includes("x64")) detectedArch = "x64";
-        } else if (/arm|aarch64/i.test(ua)) {
-          detectedArch = "arm64";
-        }
-
-        return { os: detectedOS, arch: detectedArch, isMobile };
-      };
-
-      const { os, arch, isMobile } = getPlatformInfo();
-
-      if (isMobile && mobileBanner) {
-        mobileBanner.hidden = false;
-      }
-
-      if (!os || os === "ios") {
-        if (heroCta) {
-          heroCta.textContent = "Browse desktop downloads";
-          heroCta.href = "#downloads";
-          heroCta.removeAttribute("download");
-        }
-        return;
-      }
-
-      const resourceLinks = Array.from(resources);
-      const exactMatch = resourceLinks.find((link) => {
-        return link.dataset.os === os && link.dataset.arch && arch && link.dataset.arch === arch;
-      });
-      const fallbackMatch = resourceLinks.find((link) => link.dataset.os === os);
-
-      const recommendation = exactMatch || fallbackMatch;
-      if (!recommendation) {
-        return;
-      }
-
-      recommendation.classList.add("recommended");
-      const parentCard = recommendation.closest("[data-card-os]");
-      if (parentCard) {
-        parentCard.classList.add("recommended");
-      }
-
-      if (heroCta) {
-        const cardTitle = parentCard ? parentCard.querySelector("h2").textContent : "your OS";
-        heroCta.textContent = `Download for ${cardTitle}`;
-        heroCta.href = recommendation.getAttribute("href");
-        if (recommendation.hasAttribute("download")) {
-          heroCta.setAttribute("download", recommendation.getAttribute("download") || "");
-        } else {
-          heroCta.removeAttribute("download");
-        }
-      }
-
-      if (detectedMessage && detectedName && parentCard) {
-        detectedName.textContent = parentCard.querySelector("h2").textContent;
-        detectedMessage.hidden = false;
-      }
-    })();
-  </script>
-</body>
-
+    <noscript><p class="noscript">JavaScript is optional. Downloads and project links remain fully available.</p></noscript>
+  </body>
 </html>
