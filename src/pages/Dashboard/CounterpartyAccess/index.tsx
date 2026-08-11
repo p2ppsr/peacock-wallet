@@ -23,11 +23,11 @@ import { getIdentityClient } from '../../../utils/clientFactories';
 
 const CounterpartyAccess = () => {
   const { counterparty } = useParams<{ counterparty: string }>();
-  const { managers, adminOriginator } = useContext(WalletContext);
+  const { managers, adminOriginator, network } = useContext(WalletContext);
 
   const identityClient = useMemo(
-    () => getIdentityClient(managers?.permissionsManager, adminOriginator),
-    [managers?.permissionsManager, adminOriginator]
+    () => getIdentityClient(managers?.permissionsManager, { adminOriginator, networkPreset: network }),
+    [managers?.permissionsManager, adminOriginator, network]
   );
 
   const [identity, setIdentity] = useState<DisplayableIdentity | null>(null);

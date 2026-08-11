@@ -60,7 +60,7 @@ const BasketAccess = () => {
   const { basketId } = useParams<{ basketId: string }>();
   const location = useLocation();
   const locationState = location.state as Partial<BasketDetails> | undefined;
-  const { managers, adminOriginator, settings } = useContext(WalletContext);
+  const { managers, adminOriginator, settings, network } = useContext(WalletContext);
   const { onDownloadFile } = useContext(UserContext);
 
   const [details, setDetails] = useState<BasketDetails | null>(null);
@@ -78,8 +78,8 @@ const BasketAccess = () => {
 
   const permissionManager = managers.permissionsManager;
   const registry = useMemo(
-    () => getRegistryClient(permissionManager),
-    [permissionManager]
+    () => getRegistryClient(permissionManager, { networkPreset: network }),
+    [permissionManager, network]
   );
 
   useEffect(() => {

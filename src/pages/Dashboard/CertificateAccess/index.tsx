@@ -13,7 +13,7 @@ import CheckIcon from '@mui/icons-material/Check';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DescriptionIcon from '@mui/icons-material/Description';
 import { useParams } from 'react-router-dom';
-import { Img } from '@bsv/uhrp-react';
+import Img from '../../../components/UhrpImg';
 import PageHeader from '../../../components/PageHeader';
 import DetailsSection from '../../../components/DetailsSection';
 import CertificateAccessList from '../../../components/CertificateAccessList';
@@ -41,7 +41,7 @@ type CertificateDefinition = {
 const CertificateAccess = () => {
   const { certType: encodedCertType } = useParams<{ certType: string }>();
   const certType = decodeURIComponent(encodedCertType);
-  const { managers, settings } = useContext(WalletContext);
+  const { managers, settings, network } = useContext(WalletContext);
 
   const [definition, setDefinition] = useState<CertificateDefinition | null>(null);
   const [copied, setCopied] = useState(false);
@@ -49,8 +49,8 @@ const CertificateAccess = () => {
   const [error, setError] = useState<string | null>(null);
 
   const registry = useMemo(
-    () => getRegistryClient(managers.walletManager),
-    [managers.walletManager]
+    () => getRegistryClient(managers.walletManager, { networkPreset: network }),
+    [managers.walletManager, network]
   );
 
   useEffect(() => {

@@ -3,7 +3,7 @@ import React, { FC } from 'react'
 import { Typography, Button, IconButton, Box } from '@mui/material'
 import { ArrowBack } from '@mui/icons-material'
 import style from './style'
-import { Img } from '@bsv/uhrp-react'
+import Img from '../UhrpImg'
 import useSxStyles from '../../utils/useSxStyles'
 import { useNavigate } from 'react-router-dom'
 

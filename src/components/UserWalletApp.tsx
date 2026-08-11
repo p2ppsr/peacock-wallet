@@ -2,7 +2,7 @@ import React from 'react'
 import { Card, CardActionArea, Typography, Box, Stack } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import { generateDefaultIcon } from '../constants/popularApps'
-import { Img } from '@bsv/uhrp-react'
+import Img from './UhrpImg'
 
 interface UserWalletAppProps {
   iconImageUrl?: string

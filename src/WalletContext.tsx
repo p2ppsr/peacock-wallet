@@ -32,7 +32,11 @@ import type { IdentityClient, RegistryClient } from '@bsv/sdk'
 import type { PermissionsManagerConfig } from '@bsv/wallet-toolbox-client'
 import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
-import { DEFAULT_STORAGE_URL, DEFAULT_CHAIN, ADMIN_ORIGINATOR } from './config'
+import {
+  ACTIVE_WALLET_ENVIRONMENT,
+  ADMIN_ORIGINATOR,
+  type WalletEnvironment,
+} from './config'
 import { deriveDefaultFiatCurrencyFromNavigator, getCurrencyDisplayName } from './utils/currency'
 import { UserContext } from './UserContext'
 import { CounterpartyPermissionRequest, GroupPermissionRequest, GroupedPermissions } from './types/GroupedPermissions'
@@ -111,7 +115,8 @@ export interface WalletContextValue {
   // Settings
   settings: WalletSettings;
   updateSettings: (newSettings: WalletSettings) => Promise<void>;
-  network: 'mainnet' | 'testnet';
+  network: WalletEnvironment['networkPreset'];
+  environment: WalletEnvironment;
   // Active Profile
   activeProfile: WalletProfile | null;
   setActiveProfile: (profile: WalletProfile | null) => void;
@@ -146,7 +151,8 @@ export const WalletContext = createContext<WalletContextValue>({
   updateManagers: () => { },
   settings: DEFAULT_SETTINGS,
   updateSettings: async () => { },
-  network: 'mainnet',
+  network: ACTIVE_WALLET_ENVIRONMENT.networkPreset,
+  environment: ACTIVE_WALLET_ENVIRONMENT,
   activeProfile: null,
   setActiveProfile: () => { },
   logout: () => { },
@@ -929,8 +935,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   }, [groupPermissionRequests.length])
 
   // ---- Network + storage configuration ----
-  const [selectedNetwork] = useState<'main' | 'test'>(DEFAULT_CHAIN); // "test" or "main"
-  const [selectedStorageUrl] = useState<string>(DEFAULT_STORAGE_URL);
+  const selectedNetwork = ACTIVE_WALLET_ENVIRONMENT.chain
+  const selectedStorageUrl = ACTIVE_WALLET_ENVIRONMENT.storageUrl
   const [snapshotLoaded, setSnapshotLoaded] = useState<boolean>(false);
 
   // Build wallet function
@@ -944,7 +950,11 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const keyDeriver = new CachedKeyDeriver(new PrivateKey(primaryKey));
       const storageManager = new WalletStorageManager(keyDeriver.identityKey);
       const signer = new WalletSigner(chain, keyDeriver as any, storageManager);
-      const services = new Services(chain);
+      const serviceOptions = Services.createDefaultOptions(chain)
+      if (ACTIVE_WALLET_ENVIRONMENT.arcadeUrl) {
+        serviceOptions.arcadeUrl = ACTIVE_WALLET_ENVIRONMENT.arcadeUrl
+      }
+      const services = new Services(serviceOptions);
       const makeLogger = () => new WalletLogger()
       const wallet = new Wallet(signer, services, undefined, privilegedKeyManager, makeLogger);
       newManagers.settingsManager = wallet.settingsManager;
@@ -1902,15 +1912,24 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   }, [])
 
   const registryFromWallet = useMemo(
-    () => getRegistryClient(managers.walletManager, adminOriginator),
+    () => getRegistryClient(managers.walletManager, {
+      adminOriginator,
+      networkPreset: ACTIVE_WALLET_ENVIRONMENT.networkPreset
+    }),
     [managers.walletManager, adminOriginator]
   )
   const registryFromPermissions = useMemo(
-    () => getRegistryClient(managers.permissionsManager, adminOriginator),
+    () => getRegistryClient(managers.permissionsManager, {
+      adminOriginator,
+      networkPreset: ACTIVE_WALLET_ENVIRONMENT.networkPreset
+    }),
     [managers.permissionsManager, adminOriginator]
   )
   const identityClient = useMemo(
-    () => getIdentityClient(managers.permissionsManager, adminOriginator),
+    () => getIdentityClient(managers.permissionsManager, {
+      adminOriginator,
+      networkPreset: ACTIVE_WALLET_ENVIRONMENT.networkPreset
+    }),
     [managers.permissionsManager, adminOriginator]
   )
 
@@ -1919,7 +1938,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     updateManagers: setManagers,
     settings,
     updateSettings,
-    network: selectedNetwork === 'test' ? 'testnet' : 'mainnet',
+    network: ACTIVE_WALLET_ENVIRONMENT.networkPreset,
+    environment: ACTIVE_WALLET_ENVIRONMENT,
     activeProfile: activeProfile,
     setActiveProfile: setActiveProfile,
     logout,
