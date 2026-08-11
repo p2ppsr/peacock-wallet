@@ -776,8 +776,18 @@ jobs:
             echo "No release date found in src-tauri/app.user.wallet.metainfo.xml" >&2
             exit 1
           fi
+          cp screen.png binaries-site/frontend/peacock-dashboard.png
+          cp public/app-icon.svg binaries-site/frontend/app-icon.svg
           sed -i "s/__RELEASE_VERSION__/${RELEASE_VERSION}/g" binaries-site/frontend/index.html
           sed -i "s/__RELEASE_DATE__/${RELEASE_DATE}/g" binaries-site/frontend/index.html
+          sed -i "s/__RELEASE_VERSION__/${RELEASE_VERSION}/g" binaries-site/frontend/telemetry.js
+          if grep -R "__RELEASE_" binaries-site/frontend; then
+            echo "Unresolved release metadata placeholder in marketing site" >&2
+            exit 1
+          fi
+
+      - name: Validate marketing site
+        run: node scripts/check-marketing-site.mjs --rendered
 
       - name: Check release version sync
         if: startsWith(github.ref, 'refs/tags/')

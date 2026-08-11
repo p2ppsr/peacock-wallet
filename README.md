@@ -6,6 +6,8 @@ Peacock is named for the handicap principle: a signal is credible when it is cos
 
 ![Peacock Wallet screenshot](./screen.png)
 
+**[Website and signed downloads](https://userwallet.getmetanet.com/)** · **[Latest release](https://github.com/p2ppsr/peacock-wallet/releases/latest)**
+
 ## Why this project exists
 - Offer a trustworthy BSV wallet that speaks modern protocols (BRC-100, Wallet Wire) and handles identity, permissions, and simple recovery by design.
 - Provide an approachable codebase for contributors: Tauri for native, Vite + React + MUI on the frontend, Rust for the glue.
@@ -25,12 +27,14 @@ If you hit macOS build issues for Rollup, install `npm i -g @rollup/rollup-darwi
 - `src-tauri/` — Tauri host, TLS helper, updater, and native integrations.
 - `public/` — Static assets for the Vite app.
 - `scripts/` — Dev helpers (toolbox links, versioning).
-- `docs/` — Static docs site. `binaries-site/` distributes binaries, deployed with CARS.
+- `docs/` — Static docs site.
+- `binaries-site/frontend/` — Product marketing site, signed downloads, release metadata, and privacy-bounded UserCom measurement, deployed with CARS by the release workflow.
 - CI/CD with GitHub Actions.
 
 ## Development workflow
 - **Type check & lint:** `npm run lint`
 - **Frontend build:** `npm run build`
+- **Marketing site checks:** `npm run test:marketing-site`
 - **Native run:** `npm run tauri dev`
 - **Native build:** `npm run tauri build`
 - **Format:** `npm run format`

@@ -1,0 +1,151 @@
+proofrunVersion: 1
+id: peacock-wallet-marketing-download
+name: Peacock Wallet marketing-to-download conversion
+surface:
+  repo: p2ppsr/peacock-wallet
+  workspace: /Users/tyeverett/projects/user-wallet
+  dossier: docs/repos/p2ppsr/peacock-wallet.md
+  category: onboard
+  audience: "Desktop users looking for a transparent identity and payments wallet."
+environment:
+  kind: production
+  baseUrl: https://userwallet.getmetanet.com
+  healthEndpoints:
+    - https://userwallet.getmetanet.com/manifest.json
+  deployment:
+    system: cars
+    workflow: release
+    namespace: ""
+    workload: ""
+    releaseSource: p2ppsr/peacock-wallet
+safety:
+  stateChanging: false
+  spendCap:
+    amount: 0
+    unit: sats
+  testIdentities: []
+  cleanup:
+    required: false
+    instructions: "No persistent product state is created. Synthetic UserCom signals are tagged in the run record."
+matrix:
+  desktopBrowsers:
+    - chrome
+  mobileBrowsers:
+    - responsive-browser-smoke
+  mobileSimulators: []
+  desktopWallets: []
+  mobileWallets: []
+  serverWallets: []
+  networks:
+    - mainnet
+preflight:
+  commands:
+    - description: Check source worktree
+      command: git status --short --branch
+      cwd: /Users/tyeverett/projects/user-wallet
+    - description: Check public site
+      command: curl -fsS https://userwallet.getmetanet.com/
+      cwd: /Users/tyeverett/projects/user-wallet
+    - description: Check updater manifest
+      command: curl -fsS https://userwallet.getmetanet.com/manifest.json
+      cwd: /Users/tyeverett/projects/user-wallet
+    - description: Check UserCom health
+      command: curl -fsS https://usercom.babbage.systems/healthz
+      cwd: /Users/tyeverett/projects/user-wallet
+  requiredState:
+    - "The v0.7.1 or newer signed CARS release is live."
+    - "The public manifest and release version agree."
+    - "No wallet or payment is required for this flow."
+flow:
+  steps:
+    - id: open-marketing-site
+      actor: target-user
+      action: "Open the Peacock Wallet home page."
+      expected:
+        ui:
+          - "The wallet purpose, inspectable-trust position, and primary download action are clear above the fold."
+        telemetry:
+          - "marketing.page_view is emitted with privacy-bounded session context."
+      timing:
+        thresholdMs: 2000
+    - id: inspect-product-and-trust
+      actor: target-user
+      action: "Review the product preview, handicap-principle explanation, features, and integrity information."
+      expected:
+        ui:
+          - "Identity, payments, permissions, open source, signatures, and platform support are understandable without maintainer knowledge."
+      timing:
+        thresholdMs: 5000
+    - id: choose-download
+      actor: target-user
+      action: "Use the detected recommendation or select a platform-specific signed installer."
+      expected:
+        ui:
+          - "The correct platform card and installer type are obvious."
+        domain:
+          - "The selected canonical release asset returns HTTP 200."
+        telemetry:
+          - "marketing.primary_cta_clicked or marketing.download_clicked is emitted with target platform and no wallet identity."
+      timing:
+        thresholdMs: 3000
+    - id: inspect-source
+      actor: target-user
+      action: "Open the canonical GitHub repository from the marketing site."
+      expected:
+        domain:
+          - "GitHub resolves to p2ppsr/peacock-wallet."
+        telemetry:
+          - "marketing.github_clicked is emitted."
+      timing:
+        thresholdMs: 3000
+assertions:
+  uiAppearance:
+    - "Desktop and narrow layouts are usable with no clipped or overlapping content."
+    - "Focus indicators and reduced-motion behavior are present."
+  audienceIntuition:
+    - "A new user can explain what Peacock Wallet does and choose the correct download."
+  customerTrust:
+    - "The site distinguishes inspectable evidence from marketing claims."
+    - "Signing, source, compatibility, and telemetry practices are disclosed."
+  flowSuccess:
+    - "The recommended and manual download URLs resolve to the current release artifacts."
+    - "The GitHub and release-history links resolve to the canonical renamed repository."
+  telemetryObservability:
+    - "Expected marketing events are queryable in UserCom under source=peacock-wallet and surface=marketing-site."
+    - "Signals contain no wallet identity, key material, form data, URL query, or cross-session identifier."
+  reliabilityRepeatability:
+    - "The flow works with JavaScript disabled except for recommendation and telemetry."
+    - "UserCom failure never blocks navigation or downloads."
+  performance:
+    - "First meaningful content <= 2 seconds."
+    - "Download navigation begins <= 500 milliseconds after selection."
+evidence:
+  publicSafe:
+    - "Run record in docs/proofrun/runs/."
+  privateArtifacts:
+    - "network-ops/artifacts/proofrun/p2ppsr/peacock-wallet/<run-id>/"
+telemetry:
+  expectedEvents:
+    - name: marketing.page_view
+      required: true
+    - name: marketing.primary_cta_clicked
+      required: true
+    - name: marketing.download_clicked
+      required: true
+    - name: marketing.github_clicked
+      required: true
+    - name: marketing.integrity_clicked
+      required: false
+  queryInstructions: "Query UserCom signals for source=peacock-wallet, surface=marketing-site, and the release tag; never expose raw user-agent or session values in public evidence."
+performanceThresholds:
+  firstMeaningfulContentMs: 2000
+  uiFeedbackAfterActionMs: 500
+  walletPromptShownMs: 0
+  approvalToConfirmationMs: 0
+  fullFlowMs: 30000
+  telemetryVisibleMs: 60000
+recording:
+  runRecordTemplate: docs/runbooks/proofrun-run-record-template.md
+  productRunPath: docs/proofrun/runs/<YYYYMMDDTHHMMSSZ>-peacock-wallet-marketing-download.md
+  updateDossier: true
+  updateReadinessRegistry: true
