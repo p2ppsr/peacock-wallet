@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   CircularProgress,
+  Collapse,
   Container,
   IconButton,
   InputAdornment,
@@ -11,7 +12,13 @@ import {
   TextField,
   Typography
 } from '@mui/material'
-import { CloseRounded, VisibilityOffRounded, VisibilityRounded } from '@mui/icons-material'
+import {
+  CloseRounded,
+  ExpandLessRounded,
+  ExpandMoreRounded,
+  VisibilityOffRounded,
+  VisibilityRounded
+} from '@mui/icons-material'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -19,6 +26,7 @@ import { PrivateKey, Utils } from '@bsv/sdk'
 import { Mnemonic } from '@bsv/sdk/compat'
 import { PrivilegedKeyManager } from '@bsv/wallet-toolbox-client'
 import AppLogo from '../../components/AppLogo'
+import NetworkEnvironmentSelector from '../../components/NetworkEnvironmentSelector'
 import PageLoading from '../../components/PageLoading'
 import { UserContext } from '../../UserContext'
 import { WalletContext } from '../../WalletContext'
@@ -27,6 +35,10 @@ import {
   persistKeyMaterial,
   reconcileStoredKeyMaterial
 } from '../../utils/keyMaterial'
+import {
+  getWalletEnvironmentStorageItem,
+  setWalletEnvironmentStorageItem,
+} from '../../config'
 
 type PendingApp = {
   name?: string
@@ -37,7 +49,7 @@ type PendingApp = {
 }
 
 const Greeter = () => {
-  const { managers, snapshotLoaded } = useContext(WalletContext)
+  const { environment, managers, snapshotLoaded } = useContext(WalletContext)
   const { appName, pageLoaded } = useContext(UserContext)
   const navigate = useNavigate()
   const walletManager = managers?.walletManager
@@ -48,6 +60,7 @@ const Greeter = () => {
   const [mnemonic, setMnemonic] = useState('')
   const [showKeyMaterial, setShowKeyMaterial] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false)
   const [persistedKeyLoaded, setPersistedKeyLoaded] = useState(false)
   const keyFieldRef = useRef<HTMLInputElement | null>(null)
 
@@ -164,7 +177,7 @@ const Greeter = () => {
       await walletManager.providePrivilegedKeyManager(createDisabledPrivilegedManager())
       if (!walletManager.authenticated) throw new Error('Peacock could not unlock with that key material.')
 
-      localStorage.setItem('snap', Utils.toBase64(walletManager.saveSnapshot()))
+      setWalletEnvironmentStorageItem('snap', Utils.toBase64(walletManager.saveSnapshot()))
       const savedMnemonic = persistKeyMaterial(keyHex, normalizedMnemonic || undefined)
       setMnemonic(savedMnemonic)
       setPrivateKey(keyHex)
@@ -182,7 +195,7 @@ const Greeter = () => {
     setAppInfo(null)
   }
 
-  const awaitingAutoLogin = typeof window !== 'undefined' && Boolean(localStorage.getItem('snap')) && !snapshotLoaded
+  const awaitingAutoLogin = typeof window !== 'undefined' && Boolean(getWalletEnvironmentStorageItem('snap')) && !snapshotLoaded
   if (!pageLoaded || !persistedKeyLoaded || awaitingAutoLogin) return <PageLoading />
 
   const materialPresent = mode === 'private' ? Boolean(privateKey.trim()) : Boolean(mnemonic.trim())
@@ -305,6 +318,34 @@ const Greeter = () => {
           <Alert severity="warning" variant="outlined">
             Peacock currently saves this key material in this device profile so it can reopen your wallet. Anyone who can access the profile may be able to read it. Keep an offline backup and never share it.
           </Alert>
+
+          <Button
+            variant="text"
+            size="small"
+            disabled={loading}
+            aria-expanded={advancedOptionsOpen}
+            aria-controls="greeter-advanced-options"
+            endIcon={advancedOptionsOpen ? <ExpandLessRounded /> : <ExpandMoreRounded />}
+            onClick={() => setAdvancedOptionsOpen(open => !open)}
+            sx={{
+              alignSelf: 'center',
+              color: environment.name === 'teratestnet' ? 'warning.main' : 'text.secondary',
+              textTransform: 'none'
+            }}
+          >
+            {environment.name === 'teratestnet'
+              ? 'TerraTestNet active · Network options'
+              : 'Advanced options'}
+          </Button>
+
+          <Collapse in={advancedOptionsOpen} unmountOnExit>
+            <Box
+              id="greeter-advanced-options"
+              sx={{ pt: 2, borderTop: '1px solid', borderColor: 'divider' }}
+            >
+              <NetworkEnvironmentSelector disabled={loading} compact />
+            </Box>
+          </Collapse>
         </Stack>
       </Paper>
     </Container>

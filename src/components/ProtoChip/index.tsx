@@ -8,7 +8,7 @@ import CounterpartyChip from '../CounterpartyChip/index'
 import { WalletContext } from '../../WalletContext'
 import { SecurityLevel } from '@bsv/sdk'
 import { getRegistryClient } from '../../utils/clientFactories'
-import { Img } from '@bsv/uhrp-react'
+import Img from '../UhrpImg'
 import PlaceholderAvatar from '../PlaceholderAvatar'
 
 interface ProtoChipProps {
@@ -78,10 +78,10 @@ const ProtoChip = ({
   const [description, setDescription] = useState('Protocol description not found.')
   const [documentationURL, setDocumentationURL] = useState('https://docs.bsvblockchain.org')
   const [avatarError, setAvatarError] = useState(false)
-  const { managers, settings } = useContext(WalletContext)
+  const { managers, settings, network } = useContext(WalletContext)
   const registrant = useMemo(
-    () => getRegistryClient(managers?.permissionsManager),
-    [managers?.permissionsManager]
+    () => getRegistryClient(managers?.permissionsManager, { networkPreset: network }),
+    [managers?.permissionsManager, network]
   )
 
   useEffect(() => {

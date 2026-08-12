@@ -36,14 +36,14 @@ const permissionTypeDocs = {
 };
 
 const ProtocolPermissionHandler = () => {
-  const { protocolRequests, advanceProtocolQueue, managers, settings } = useContext(WalletContext)
+  const { protocolRequests, advanceProtocolQueue, managers, settings, network } = useContext(WalletContext)
   const { protocolAccessModalOpen } = useContext(UserContext)
   const [protocolName, setProtocolName] = useState<string | null>(null)
   const [protocolDescription, setProtocolDescription] = useState<string | null>(null)
 
   const registry = useMemo(
-    () => getRegistryClient(managers?.permissionsManager),
-    [managers?.permissionsManager]
+    () => getRegistryClient(managers?.permissionsManager, { networkPreset: network }),
+    [managers?.permissionsManager, network]
   )
 
   // Handle denying the top request in the queue

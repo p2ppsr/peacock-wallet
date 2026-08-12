@@ -38,7 +38,7 @@ const ProtocolAccess = () => {
   const protocolId = decodeURIComponent(encodedProtocolId);
   const securityLevel = Number(decodeURIComponent(encodedSecurityLevel));
   const location = useLocation();
-  const { managers, settings } = useContext(WalletContext);
+  const { managers, settings, network } = useContext(WalletContext);
 
   const locationState = location.state as Partial<ProtocolDetails> | undefined;
 
@@ -57,8 +57,8 @@ const ProtocolAccess = () => {
   const [error, setError] = useState<string | null>(null);
 
   const registry = useMemo(
-    () => getRegistryClient(managers.walletManager),
-    [managers.walletManager]
+    () => getRegistryClient(managers.walletManager, { networkPreset: network }),
+    [managers.walletManager, network]
   );
 
   useEffect(() => {

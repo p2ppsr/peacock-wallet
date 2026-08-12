@@ -33,7 +33,6 @@ import { PeerPayClient, IncomingPayment } from '@bsv/message-box-client'
 import type { IdentityClient, WalletInterface } from '@bsv/sdk'
 import { WalletContext } from '../../../WalletContext'
 import { toast } from 'react-toastify'
-import { MESSAGEBOX_HOST } from '../../../config'
 import { CurrencyConverter } from 'amountinator'
 import { useLocation, useNavigate } from 'react-router-dom'
 import useAsyncEffect from 'use-async-effect'
@@ -46,6 +45,7 @@ export type PeerPayRouteProps = {
 
 type PaymentFormProps = {
   peerPay: PeerPayClient | null
+  messageBoxHost: string
   onSent?: () => void
   defaultRecipient?: string
   identityClient: IdentityClient | null
@@ -58,7 +58,7 @@ type ResolvedIdentity = {
   avatarURL?: string
 }
 
-function PaymentForm({ peerPay, onSent, defaultRecipient, identityClient }: PaymentFormProps) {
+function PaymentForm({ peerPay, messageBoxHost, onSent, defaultRecipient, identityClient }: PaymentFormProps) {
   const [searchValue, setSearchValue] = useState(defaultRecipient ?? '')
   const [options, setOptions] = useState<ResolvedIdentity[]>([])
   const [amount, setAmount] = useState<number>(0)
@@ -213,7 +213,7 @@ function PaymentForm({ peerPay, onSent, defaultRecipient, identityClient }: Paym
       await peerPay.sendLivePayment({
         recipient: effectiveRecipient,
         amount
-      }, MESSAGEBOX_HOST)
+      }, messageBoxHost)
       onSent?.()
       toast.success('Payment sent')
       setLastSent({ identity: resolvedIdentity ?? { identityKey: effectiveRecipient }, amount })
@@ -404,9 +404,10 @@ type PaymentListProps = {
   peerPay: PeerPayClient | null
   loading: boolean
   identityClient: IdentityClient | null
+  messageBoxHost: string
 }
 
-function PaymentList({ payments, onRefresh, peerPay, loading, identityClient }: PaymentListProps) {
+function PaymentList({ payments, onRefresh, peerPay, loading, identityClient, messageBoxHost }: PaymentListProps) {
   const [loadingById, setLoadingById] = useState<Record<string, 'accept' | 'return'>>({})
   const [senderDetails, setSenderDetails] = useState<Record<string, ResolvedIdentity>>({})
 
@@ -463,7 +464,7 @@ function PaymentList({ payments, onRefresh, peerPay, loading, identityClient }: 
     } catch (e1) {
       toast.error('[Payments] acceptPayment failed, retrying…')
       try {
-        const list = await peerPay.listIncomingPayments(MESSAGEBOX_HOST)
+        const list = await peerPay.listIncomingPayments(messageBoxHost)
         const fresh = list.find(x => String(x.messageId) === id)
         if (!fresh) throw new Error('Payment not found on refresh')
         await peerPay.acceptPayment(fresh)
@@ -695,7 +696,7 @@ function BuyPanel({ wallet, satoshisPerUSD }: BuyPanelProps) {
 }
 
 export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
-  const { managers, adminOriginator, clients } = useContext(WalletContext)
+  const { managers, adminOriginator, clients, environment } = useContext(WalletContext)
   const location = useLocation()
   const navigate = useNavigate()
   const rates = useContext(ExchangeRateContext)
@@ -712,11 +713,11 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
     if (!walletClientForPeerPay) return null
     return new PeerPayClient({
       walletClient: walletClientForPeerPay,
-      messageBoxHost: MESSAGEBOX_HOST,
+      messageBoxHost: environment.messageBoxHost,
       enableLogging: true,
       originator: adminOriginator
     })
-  }, [walletClientForPeerPay, adminOriginator])
+  }, [walletClientForPeerPay, adminOriginator, environment.messageBoxHost])
 
   const [payments, setPayments] = useState<IncomingPayment[]>([])
   const [loading, setLoading] = useState(false)
@@ -750,14 +751,14 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
     if (!peerPay) return
     setLoading(true)
     try {
-      const list = await peerPay.listIncomingPayments(MESSAGEBOX_HOST)
+      const list = await peerPay.listIncomingPayments(environment.messageBoxHost)
       setPayments(list)
     } catch (e) {
       setSnack({ open: true, msg: (e as Error)?.message ?? 'Failed to load payments', severity: 'error' })
     } finally {
       setLoading(false)
     }
-  }, [peerPay])
+  }, [peerPay, environment.messageBoxHost])
 
   useEffect(() => {
     fetchPayments()
@@ -771,7 +772,7 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
       try {
         await peerPay.initializeConnection()
         await peerPay.listenForLivePayments({
-          overrideHost: MESSAGEBOX_HOST,
+          overrideHost: environment.messageBoxHost,
           onPayment: (payment) => {
             if (!mounted) return
             setPayments((prev) => [...prev, payment])
@@ -787,7 +788,7 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
       mounted = false
       peerPay.disconnectWebSocket?.().catch(() => { /* ignore */ })
     }
-  }, [peerPay])
+  }, [peerPay, environment.messageBoxHost])
 
   useEffect(() => {
     if (!walletClientForPeerPay || !adminOriginator) return undefined
@@ -843,6 +844,7 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
             {activeTab === 'send' ? (
               <PaymentForm
                 peerPay={peerPay}
+                messageBoxHost={environment.messageBoxHost}
                 onSent={fetchPayments}
                 defaultRecipient={defaultRecipient}
                 identityClient={identityClient}
@@ -860,6 +862,7 @@ export default function PeerPayRoute({ defaultRecipient }: PeerPayRouteProps) {
             payments={payments}
             onRefresh={fetchPayments}
             peerPay={peerPay}
+            messageBoxHost={environment.messageBoxHost}
             loading={loading}
             identityClient={identityClient}
           />

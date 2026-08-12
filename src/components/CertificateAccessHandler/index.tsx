@@ -18,7 +18,7 @@ type CertificateAccessRequest = {
 }
 
 const CertificateAccessHandler = () => {
-  const { certificateRequests, advanceCertificateQueue, managers, settings } = useContext(WalletContext)
+  const { certificateRequests, advanceCertificateQueue, managers, settings, network } = useContext(WalletContext)
   const { certificateAccessModalOpen } = useContext(UserContext)
 
   const [granting, setGranting] = useState(false)
@@ -26,8 +26,8 @@ const CertificateAccessHandler = () => {
   const [certName, setCertName] = useState<string | null>(null)
 
   const registry = useMemo(
-    () => getRegistryClient(managers?.permissionsManager),
-    [managers?.permissionsManager]
+    () => getRegistryClient(managers?.permissionsManager, { networkPreset: network }),
+    [managers?.permissionsManager, network]
   )
 
   const handleDeny = async () => {

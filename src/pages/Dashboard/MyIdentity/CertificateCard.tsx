@@ -18,7 +18,7 @@ import {
 } from '@mui/material'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import CheckIcon from '@mui/icons-material/Check'
-import { Img } from '@bsv/uhrp-react'
+import Img from '../../../components/UhrpImg'
 import CounterpartyChip from '../../../components/CounterpartyChip'
 import Chip from '@mui/material/Chip'
 import { DEFAULT_APP_ICON } from '../../../constants/popularApps'
@@ -73,14 +73,14 @@ const CertificateCard: React.FC<CertificateCardProps> = ({
   const [iconURL, setIconURL] = useState<string>(DEFAULT_APP_ICON)
   const [description, setDescription] = useState<string>('')
   const [fields, setFields] = useState<{ [key: string]: CertificateFieldDescriptor }>({})
-  const { managers, settings, activeProfile } = useContext(WalletContext)
+  const { managers, settings, activeProfile, network } = useContext(WalletContext)
   const [modalOpen, setModalOpen] = useState<boolean>(false)
   const [documentationURL, setDocumentationURL] = useState<string>('')
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState<boolean>(false)
 
   const registrant = useMemo(
-    () => getRegistryClient(managers.walletManager),
-    [managers.walletManager]
+    () => getRegistryClient(managers.walletManager, { networkPreset: network }),
+    [managers.walletManager, network]
   )
 
   const isPublicOnChain = Boolean(publicOnChain)
