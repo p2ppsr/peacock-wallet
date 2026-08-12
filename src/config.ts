@@ -39,6 +39,15 @@ const ENVIRONMENTS: Record<WalletEnvironmentName, WalletEnvironment> = {
 }
 
 type WalletEnvironmentStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
+type WalletEnvironmentSwitchStorage = WalletEnvironmentStorage & Pick<Storage, 'key' | 'length'>
+type WalletEnvironmentSessionStorage = Pick<Storage, 'clear'>
+
+const LEGACY_MAINNET_UNLOCK_KEYS = new Set(['snap', 'primaryKeyHex', 'mnemonic12'])
+const NETWORK_INDEPENDENT_STORAGE_KEYS = new Set([
+  'userTheme',
+  'user-wallet:diagnostics-enabled:v1',
+  'user-wallet:diagnostics-anonymous-id:v1',
+])
 
 function browserStorage(): WalletEnvironmentStorage | undefined {
   try {
@@ -46,6 +55,28 @@ function browserStorage(): WalletEnvironmentStorage | undefined {
   } catch {
     return undefined
   }
+}
+
+function browserSwitchStorage(): WalletEnvironmentSwitchStorage | undefined {
+  try {
+    return typeof window === 'undefined' ? undefined : window.localStorage
+  } catch {
+    return undefined
+  }
+}
+
+function browserSessionStorage(): WalletEnvironmentSessionStorage | undefined {
+  try {
+    return typeof window === 'undefined' ? undefined : window.sessionStorage
+  } catch {
+    return undefined
+  }
+}
+
+function shouldPreserveAcrossEnvironmentSwitch(key: string): boolean {
+  return /^peacock:(mainnet|teratestnet):wallet:v1:/.test(key) ||
+    LEGACY_MAINNET_UNLOCK_KEYS.has(key) ||
+    NETWORK_INDEPENDENT_STORAGE_KEYS.has(key)
 }
 
 /**
@@ -90,6 +121,34 @@ export function persistWalletEnvironment(
 ): WalletEnvironment {
   const environment = resolveWalletEnvironment(name)
   if (!storage) throw new Error('Wallet environment storage is unavailable.')
+  storage.setItem(WALLET_ENVIRONMENT_STORAGE_KEY, environment.name)
+  return environment
+}
+
+/**
+ * Remove network-derived UI caches before selecting a different environment.
+ * Unlock material remains isolated and available for both networks, while
+ * transient app handoffs and cached actions, identities, certificates,
+ * permissions, app catalogs, and purchase state are discarded before reload.
+ */
+export function prepareWalletEnvironmentSwitch(
+  name: WalletEnvironmentName,
+  storage: WalletEnvironmentSwitchStorage | undefined = browserSwitchStorage(),
+  session: WalletEnvironmentSessionStorage | undefined = browserSessionStorage()
+): WalletEnvironment {
+  const environment = resolveWalletEnvironment(name)
+  if (!storage) throw new Error('Wallet environment storage is unavailable.')
+
+  const keys: string[] = []
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index)
+    if (key) keys.push(key)
+  }
+  for (const key of keys) {
+    if (!shouldPreserveAcrossEnvironmentSwitch(key)) storage.removeItem(key)
+  }
+
+  session?.clear()
   storage.setItem(WALLET_ENVIRONMENT_STORAGE_KEY, environment.name)
   return environment
 }

@@ -12,7 +12,7 @@ import {
 } from '@mui/material'
 import { WalletContext } from '../WalletContext'
 import {
-  persistWalletEnvironment,
+  prepareWalletEnvironmentSwitch,
   resolveWalletEnvironment,
   type WalletEnvironmentName,
 } from '../config'
@@ -33,6 +33,7 @@ export default function NetworkEnvironmentSelector({
 }: NetworkEnvironmentSelectorProps) {
   const { environment } = useContext(WalletContext)
   const [pendingEnvironment, setPendingEnvironment] = useState<WalletEnvironmentName | null>(null)
+  const [switchError, setSwitchError] = useState('')
   const pending = useMemo(
     () => pendingEnvironment ? resolveWalletEnvironment(pendingEnvironment) : null,
     [pendingEnvironment]
@@ -43,8 +44,13 @@ export default function NetworkEnvironmentSelector({
       setPendingEnvironment(null)
       return
     }
-    persistWalletEnvironment(pendingEnvironment)
-    window.location.reload()
+    try {
+      prepareWalletEnvironmentSwitch(pendingEnvironment)
+      window.location.reload()
+    } catch (error) {
+      setPendingEnvironment(null)
+      setSwitchError((error as Error)?.message || 'Unable to switch wallet environment.')
+    }
   }
 
   return (
@@ -80,6 +86,7 @@ export default function NetworkEnvironmentSelector({
           ? 'Mainnet is active. Transactions can spend coins with real value.'
           : 'TerraTestNet is active. Peacock is using the isolated staging service stack and TTN coins have no mainnet value.'}
       </Alert>
+      {switchError && <Alert severity="error" sx={{ mt: 1.5 }}>{switchError}</Alert>}
 
       <Dialog open={Boolean(pending)} onClose={() => setPendingEnvironment(null)} fullWidth maxWidth="sm">
         <DialogTitle>Switch to {pending ? environmentLabel(pending.name) : ''}?</DialogTitle>
@@ -93,6 +100,10 @@ export default function NetworkEnvironmentSelector({
             Peacock will reload and connect to {pending?.storageUrl}. Local unlock state is kept
             separately for each network, so you may need to unlock or create a wallet profile for
             the selected network.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+            Cached wallet views and pending app connections will be cleared so data from the
+            current network cannot appear after the switch.
           </Typography>
         </DialogContent>
         <DialogActions>

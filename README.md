@@ -43,7 +43,8 @@ If you hit macOS build issues for Rollup, install `npm i -g @rollup/rollup-darwi
 
 Peacock defaults to mainnet. Users can select **Mainnet** or **TerraTestNet** from the
 unlock screen or under **Settings → Advanced Settings → Network & services**. Switching
-profiles reloads Peacock and keeps local unlock state isolated by network.
+profiles reloads Peacock, keeps local unlock state isolated by network, and clears cached
+wallet views plus pending app connections before the new network starts.
 
 Developers can seed the initial profile with `VITE_WALLET_ENVIRONMENT`; a user's saved
 selection takes precedence on later starts:
