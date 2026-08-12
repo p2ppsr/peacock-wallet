@@ -41,21 +41,26 @@ If you hit macOS build issues for Rollup, install `npm i -g @rollup/rollup-darwi
 
 ## Network environments
 
-Peacock defaults to mainnet. Select another profile at build or development time with
-`VITE_WALLET_ENVIRONMENT`:
+Peacock defaults to mainnet. Users can select **Mainnet** or **TerraTestNet** from the
+unlock screen or under **Settings → Advanced Settings → Network & services**. Switching
+profiles reloads Peacock and keeps local unlock state isolated by network.
+
+Developers can seed the initial profile with `VITE_WALLET_ENVIRONMENT`; a user's saved
+selection takes precedence on later starts:
 
 ```sh
 VITE_WALLET_ENVIRONMENT=teratestnet npm run tauri dev
 VITE_WALLET_ENVIRONMENT=teratestnet npm run tauri build
 ```
 
-Supported values are `mainnet`, `testnet`, and `teratestnet` (with `main`, `test`, and
-`ttn` accepted as aliases). The TerraTestNet profile uses:
+Supported values are `mainnet` and `teratestnet` (with `main`, `ttn`, and `terratestnet`
+accepted as aliases). The TerraTestNet profile uses:
 
 - wallet chain `ttn` and the SDK's isolated `teratestnet` SHIP/SLAP roots;
 - `https://staging-storage.babbage.systems` for wallet storage;
+- `https://staging-chaintracks.babbage.systems` for CORS-safe Atomic BEEF proof validation;
+- `https://arcade-v2-ttn-us-1.bsvblockchain.tech` for transaction broadcasting;
 - `https://staging-messagebox.babbage.systems` for Message Box and PeerPay;
-- `https://arcade-v2-ttn-us-1.bsvblockchain.tech` for transaction broadcast and ChainTracks;
 - the same `teratestnet` resolver for registry, identity, and UHRP lookups.
 
 Staging WAB and staging CARS applications connect to Peacock through its normal wallet bridge;

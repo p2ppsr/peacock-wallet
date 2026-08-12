@@ -21,6 +21,7 @@ import {
   DEFAULT_SETTINGS,
   WalletSettings,
   WalletSettingsManager,
+  ChaintracksServiceClient,
 } from '@bsv/wallet-toolbox-client'
 import {
   PrivateKey,
@@ -35,6 +36,10 @@ import 'react-toastify/dist/ReactToastify.css'
 import {
   ACTIVE_WALLET_ENVIRONMENT,
   ADMIN_ORIGINATOR,
+  WALLET_ENVIRONMENT_STORAGE_KEY,
+  getWalletEnvironmentStorageItem,
+  removeWalletEnvironmentStorageItem,
+  walletEnvironmentStoragePrefix,
   type WalletEnvironment,
 } from './config'
 import { deriveDefaultFiatCurrencyFromNavigator, getCurrencyDisplayName } from './utils/currency'
@@ -951,6 +956,15 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const storageManager = new WalletStorageManager(keyDeriver.identityKey);
       const signer = new WalletSigner(chain, keyDeriver as any, storageManager);
       const serviceOptions = Services.createDefaultOptions(chain)
+      if (ACTIVE_WALLET_ENVIRONMENT.chaintracksUrl) {
+        // Arcade's Go ChainTracks endpoint does not currently allow browser
+        // CORS requests. Use the staging ChainTracks facade for proof
+        // validation while retaining Arcade below for TTN broadcasting.
+        serviceOptions.chaintracks = new ChaintracksServiceClient(
+          chain,
+          ACTIVE_WALLET_ENVIRONMENT.chaintracksUrl
+        )
+      }
       if (ACTIVE_WALLET_ENVIRONMENT.arcadeUrl) {
         serviceOptions.arcadeUrl = ACTIVE_WALLET_ENVIRONMENT.arcadeUrl
       }
@@ -1128,9 +1142,10 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
   // Load snapshot function
   const loadWalletSnapshot = useCallback(async (walletManager: SimpleWalletManager) => {
-    if (localStorage.snap) {
+    const savedSnapshot = getWalletEnvironmentStorageItem('snap')
+    if (savedSnapshot) {
       try {
-        const snapArr = Utils.toArray(localStorage.snap, 'base64');
+        const snapArr = Utils.toArray(savedSnapshot, 'base64');
         await walletManager.loadSnapshot(snapArr);
         // We'll handle setting snapshotLoaded in a separate effect watching authenticated state
       } catch (err: any) {
@@ -1138,7 +1153,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         reportDiagnosticError('wallet.snapshot_load_failed', err, {
           surface: 'wallet-lifecycle'
         })
-        localStorage.removeItem('snap'); // Clear invalid snapshot
+        removeWalletEnvironmentStorageItem('snap'); // Clear invalid snapshot
         toast.error("Couldn't load saved data: " + err.message);
       }
     }
@@ -1146,7 +1161,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
   // Watch for wallet authentication after snapshot is loaded
   useEffect(() => {
-    if (managers?.walletManager?.authenticated && localStorage.snap) {
+    if (managers?.walletManager?.authenticated && getWalletEnvironmentStorageItem('snap')) {
       setSnapshotLoaded(true);
     }
   }, [managers?.walletManager?.authenticated]);
@@ -1346,11 +1361,24 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
   const logout = useCallback(() => {
     const preserved: Record<string, string> = {}
+    const activeEnvironmentPrefix = walletEnvironmentStoragePrefix()
+    const preserveLegacyMainnetUnlock = ACTIVE_WALLET_ENVIRONMENT.name !== 'mainnet'
     try {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i)
         if (!key) continue
-        if (key.startsWith('uw_region_currency_prompted_v1:') || key.startsWith('uw_first_login_done_v1:')) {
+        const belongsToAnotherEnvironment = key.startsWith('peacock:') &&
+          key.includes(':wallet:v1:') &&
+          !key.startsWith(activeEnvironmentPrefix)
+        const isLegacyMainnetUnlock = preserveLegacyMainnetUnlock &&
+          ['snap', 'primaryKeyHex', 'mnemonic12'].includes(key)
+        if (
+          key === WALLET_ENVIRONMENT_STORAGE_KEY ||
+          key.startsWith('uw_region_currency_prompted_v1:') ||
+          key.startsWith('uw_first_login_done_v1:') ||
+          belongsToAnotherEnvironment ||
+          isLegacyMainnetUnlock
+        ) {
           const value = localStorage.getItem(key)
           if (value != null) preserved[key] = value
         }
@@ -1369,12 +1397,6 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     } catch {
       // ignore
     }
-    if (localStorage.snap) {
-      localStorage.removeItem('snap');
-    }
-    localStorage.removeItem('primaryKeyHex');
-    localStorage.removeItem('mnemonic12');
-
     // Reset manager state
     setManagers({});
 
@@ -1916,21 +1938,21 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       adminOriginator,
       networkPreset: ACTIVE_WALLET_ENVIRONMENT.networkPreset
     }),
-    [managers.walletManager, adminOriginator]
+    [managers.walletManager, adminOriginator, selectedNetwork]
   )
   const registryFromPermissions = useMemo(
     () => getRegistryClient(managers.permissionsManager, {
       adminOriginator,
       networkPreset: ACTIVE_WALLET_ENVIRONMENT.networkPreset
     }),
-    [managers.permissionsManager, adminOriginator]
+    [managers.permissionsManager, adminOriginator, selectedNetwork]
   )
   const identityClient = useMemo(
     () => getIdentityClient(managers.permissionsManager, {
       adminOriginator,
       networkPreset: ACTIVE_WALLET_ENVIRONMENT.networkPreset
     }),
-    [managers.permissionsManager, adminOriginator]
+    [managers.permissionsManager, adminOriginator, selectedNetwork]
   )
 
   const contextValue = useMemo<WalletContextValue>(() => ({
