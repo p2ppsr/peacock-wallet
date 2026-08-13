@@ -10,15 +10,15 @@ import { getRegistryClient } from '../../utils/clientFactories'
 
 
 const BasketAccessHandler = () => {
-    const { basketRequests, advanceBasketQueue, managers, settings } = useContext(WalletContext)
+    const { basketRequests, advanceBasketQueue, managers, settings, network } = useContext(WalletContext)
     const { basketAccessModalOpen } = useContext(UserContext)
     const [basketName, setBasketName] = useState<string | null>(null)
 
     const currentRequest = basketRequests[0]
 
     const registry = useMemo(
-        () => getRegistryClient(managers?.permissionsManager),
-        [managers?.permissionsManager]
+        () => getRegistryClient(managers?.permissionsManager, { networkPreset: network }),
+        [managers?.permissionsManager, network]
     )
 
     useEffect(() => {

@@ -18,7 +18,7 @@ import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import HistoryIcon from '@mui/icons-material/History'
 import CloseIcon from '@mui/icons-material/Close'
 import RefreshIcon from '@mui/icons-material/Refresh'
-import { Img } from '@bsv/uhrp-react'
+import Img from '../../../components/UhrpImg'
 import Fuse from 'fuse.js'
 import { useNavigate } from 'react-router-dom'
 

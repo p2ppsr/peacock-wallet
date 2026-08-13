@@ -18,4 +18,4 @@ Advanced Settings exposes local/remote mode, local height/tip, reference height 
 
 ## Release dependency
 
-This draft is intentionally release-blocked until [bsv-blockchain/ts-stack#463](https://github.com/bsv-blockchain/ts-stack/pull/463) is merged and stable `@bsv/wallet-toolbox-client >=2.8.0` packages are published. Every release command runs `chaintracks:release-gate`. After publication, update the dependency and lockfile, run all checks, and only then make the wallet PR ready or publish a binary.
+Every release command runs `chaintracks:release-gate` and requires stable `@bsv/wallet-toolbox-client >=2.9.0`. That line includes the local-first verification boundary from ts-stack #463 and the resilient, non-blocking bulk-ingestion runtime from #469. The wallet imports those published APIs directly and has no dependency on the closed, unmerged ts-stack #472.

@@ -63,7 +63,7 @@ const MyIdentity: React.FC = () => {
 
     const unique = Array.from(new Set(collected))
     setOnChainSerialNumbers(unique)
-  }, [primaryIdentityKey])
+  }, [network, primaryIdentityKey])
 
   const cacheKey = useMemo(() => {
     if (!activeProfile?.id) return null
@@ -200,17 +200,17 @@ const MyIdentity: React.FC = () => {
     const certificate = certificates.find(c => c.serialNumber === _serialNumber)
 
     if (!certificate) return
-    const identityClient = getIdentityClient(permissionsManager, adminOriginator)
+    const identityClient = getIdentityClient(permissionsManager, { adminOriginator, networkPreset: network })
     if (!identityClient) return
 
     await identityClient.publiclyRevealAttributes(certificate, Object.keys(certificate.decryptedFields))
-  }, [permissionsManager, adminOriginator, certificates])
+  }, [permissionsManager, adminOriginator, certificates, network])
 
   const handleRevokeCertificate = useCallback(async (serialNumber: string) => {
-    const identityClient = getIdentityClient(permissionsManager, adminOriginator)
+    const identityClient = getIdentityClient(permissionsManager, { adminOriginator, networkPreset: network })
     if (!identityClient) return
     await identityClient.revokeCertificateRevelation(serialNumber)
-  }, [permissionsManager, adminOriginator])
+  }, [permissionsManager, adminOriginator, network])
 
   const handlePublicVisibilityChange = useCallback(
     async (serialNumber: string, isPublic: boolean) => {
@@ -310,7 +310,7 @@ const MyIdentity: React.FC = () => {
       }}
     >
       <Typography variant="h1" color="textPrimary" sx={{ mb: 2 }}>
-        {network === 'testnet' ? 'Testnet Identity' : 'Identity'}
+        {network === 'teratestnet' ? 'TerraTestNet Identity' : network === 'testnet' ? 'Testnet Identity' : 'Identity'}
       </Typography>
       <Typography variant="body1" color="textSecondary" sx={{ mb: 4 }}>
         Manage the public identity apps use to recognize you and the credentials that support it.

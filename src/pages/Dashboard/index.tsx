@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   Box,
+  Alert,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
@@ -42,7 +43,7 @@ import { toast } from 'react-toastify';
  */
 export default function Dashboard() {
   const { pageLoaded } = useContext(UserContext);
-  const { activeProfile } = useContext(WalletContext)
+  const { activeProfile, environment } = useContext(WalletContext)
   const breakpoints = useBreakpoint();
   const theme = useTheme();
   const styles = useMemo(() => style(theme, { breakpoints }), [theme, breakpoints]);
@@ -112,6 +113,11 @@ export default function Dashboard() {
         width: menuOpen ? `calc(100vw - ${getMargin()})` : '100vw',
         transition: 'width 0.3s ease, margin 0.3s ease'
       }}>
+        {environment.name !== 'mainnet' && (
+          <Alert severity="warning" variant="filled" sx={{ borderRadius: 0 }}>
+            {environment.name === 'teratestnet' ? 'TerraTestNet' : 'Testnet'} wallet — funds have no mainnet value.
+          </Alert>
+        )}
         {redirectOpen && (
         <Dialog
           open

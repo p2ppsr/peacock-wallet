@@ -7,7 +7,7 @@ import { generateDefaultIcon } from '../../constants/popularApps'
 import { useTheme } from '@mui/material/styles'
 import ShoppingBasket from '@mui/icons-material/ShoppingBasket'
 import { WalletContext } from '../../WalletContext'
-import { Img } from '@bsv/uhrp-react'
+import Img from '../UhrpImg'
 import useSxStyles from '../../utils/useSxStyles'
 import { getRegistryClient } from '../../utils/clientFactories'
 import { openUrl } from '../../utils/openUrl'
@@ -38,6 +38,7 @@ const BasketChip = ({
   const {
     managers,
     settings,
+    network,
   } = useContext(WalletContext)
 
   if (typeof basketId !== 'string') {
@@ -48,8 +49,8 @@ const BasketChip = ({
 
   // Initialize BasketMap
   const registrant = useMemo(
-    () => getRegistryClient(managers?.permissionsManager),
-    [managers?.permissionsManager]
+    () => getRegistryClient(managers?.permissionsManager, { networkPreset: network }),
+    [managers?.permissionsManager, network]
   )
 
   const [basketName, setBasketName] = useState(basketId)

@@ -1,12 +1,23 @@
 import { MessageBoxClient } from '@bsv/message-box-client';
-import { IdentityClient, LookupResolver, RegistryClient, WalletInterface } from '@bsv/sdk';
+import {
+  IdentityClient,
+  LookupResolver,
+  RegistryClient,
+  WalletInterface,
+  type LookupNetworkPreset,
+} from '@bsv/sdk';
 import type { WalletPermissionsManager } from '@bsv/wallet-toolbox-client';
 
 type RegistrySource =
   | WalletPermissionsManager
   | WalletInterface;
 
-const registryClientCache = new WeakMap<object, RegistryClient>();
+type OverlayClientConfig = {
+  networkPreset: LookupNetworkPreset;
+  adminOriginator?: string;
+};
+
+const registryClientCache = new WeakMap<object, Map<string, RegistryClient>>();
 const identityClientCache = new WeakMap<
   WalletPermissionsManager,
   Map<string, IdentityClient>
@@ -18,25 +29,36 @@ const messageBoxClientCache = new WeakMap<
 const lookupResolverCache = new Map<string, LookupResolver>();
 
 export const getRegistryClient = (
-  source?: RegistrySource | null,
-  adminOriginator?: string
+  source: RegistrySource | null | undefined,
+  config: OverlayClientConfig
 ): RegistryClient | null => {
   if (!source) return null;
+  const cacheKey = `${config.networkPreset}|${config.adminOriginator ?? ''}`;
 
-  let client = registryClientCache.get(source);
+  let bucket = registryClientCache.get(source);
+  if (!bucket) {
+    bucket = new Map();
+    registryClientCache.set(source, bucket);
+  }
+
+  let client = bucket.get(cacheKey);
   if (!client) {
-    client = new RegistryClient(source, undefined, adminOriginator);
-    registryClientCache.set(source, client);
+    client = new RegistryClient(
+      source,
+      { networkPreset: config.networkPreset },
+      config.adminOriginator
+    );
+    bucket.set(cacheKey, client);
   }
   return client;
 };
 
 export const getIdentityClient = (
-  manager?: WalletPermissionsManager | null,
-  adminOriginator?: string
+  manager: WalletPermissionsManager | null | undefined,
+  config: OverlayClientConfig
 ): IdentityClient | null => {
   if (!manager) return null;
-  const cacheKey = adminOriginator ?? '';
+  const cacheKey = `${config.networkPreset}|${config.adminOriginator ?? ''}`;
 
   let bucket = identityClientCache.get(manager);
   if (!bucket) {
@@ -46,7 +68,11 @@ export const getIdentityClient = (
 
   let client = bucket.get(cacheKey);
   if (!client) {
-    client = new IdentityClient(manager, undefined, adminOriginator);
+    client = new IdentityClient(
+      manager,
+      { networkPreset: config.networkPreset },
+      config.adminOriginator
+    );
     bucket.set(cacheKey, client);
   }
   return client;
@@ -57,10 +83,11 @@ type MessageBoxConfig = {
   host: string;
   originator?: string;
   enableLogging?: boolean;
+  networkPreset: LookupNetworkPreset;
 };
 
 type LookupResolverConfig = {
-  networkPreset: 'mainnet' | 'testnet' | 'local';
+  networkPreset: LookupNetworkPreset;
 }
 
 export const getMessageBoxClient = ({
@@ -68,9 +95,10 @@ export const getMessageBoxClient = ({
   host,
   originator,
   enableLogging = false,
+  networkPreset,
 }: MessageBoxConfig): MessageBoxClient | null => {
   if (!walletClient) return null;
-  const cacheKey = `${host}|${originator ?? ''}|${enableLogging ? '1' : '0'}`;
+  const cacheKey = `${networkPreset}|${host}|${originator ?? ''}|${enableLogging ? '1' : '0'}`;
 
   let bucket = messageBoxClientCache.get(walletClient);
   if (!bucket) {
@@ -85,6 +113,7 @@ export const getMessageBoxClient = ({
       host,
       originator,
       enableLogging,
+      networkPreset,
     });
     bucket.set(cacheKey, client);
   }

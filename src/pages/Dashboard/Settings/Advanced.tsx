@@ -18,6 +18,7 @@ import { WalletContext } from '../../../WalletContext'
 import { toast } from 'react-toastify'
 import { useNavigate } from 'react-router-dom'
 import PageHeader from '../../../components/PageHeader'
+import NetworkEnvironmentSelector from '../../../components/NetworkEnvironmentSelector'
 import { DEFAULT_APP_ICON } from '../../../constants/popularApps'
 import {
   SUPPORTED_FIAT_CURRENCIES,
@@ -111,6 +112,10 @@ const AdvancedSettings: React.FC = () => {
           <LinearProgress />
         </Box>
       )}
+
+      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 3 }}>
+        <NetworkEnvironmentSelector disabled={settingsLoading} />
+      </Paper>
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 3 }}>
         <Typography variant='h4' sx={{ mb: 1 }}>

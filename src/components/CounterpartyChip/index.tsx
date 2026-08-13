@@ -9,7 +9,7 @@ import style from './style'
 import PlaceholderAvatar from '../PlaceholderAvatar'
 import deterministicImage from '../../utils/deterministicImage'
 import { WalletContext } from '../../WalletContext'
-import { Img } from '@bsv/uhrp-react'
+import Img from '../UhrpImg'
 import useSxStyles from '../../utils/useSxStyles'
 
 interface CounterpartyChipProps {

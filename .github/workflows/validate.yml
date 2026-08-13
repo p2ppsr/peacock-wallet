@@ -1,0 +1,51 @@
+name: validate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run test:security
+      - run: npm run test:marketing-site
+      - run: npm audit --audit-level=high
+      - name: Build mainnet wallet
+        run: npm run build
+      - name: Build TerraTestNet wallet
+        run: npm run build
+        env:
+          VITE_WALLET_ENVIRONMENT: teratestnet
+      - name: Check release version sync
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          node scripts/check-release-version.js "v${version}"
+
+  native:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Check native host
+        working-directory: src-tauri
+        run: cargo check --locked

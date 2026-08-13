@@ -68,6 +68,7 @@ export type ActivePromptSummary = {
 export type WalletBridgeInspector = {
   getPermissionBaseline: (originator: string) => Promise<PermissionBaselineCounts>;
   getActivePromptSummary?: () => ActivePromptSummary | null;
+  warmStorageConnection?: () => void;
 };
 
 let activeListenerToken = 0;
@@ -364,6 +365,7 @@ export const onWalletReady = async (
         // 1. createAction
         case '/createAction': {
           try {
+            inspector?.warmStorageConnection?.()
             const args = JSON.parse(req.body) as CreateActionArgs;
 
             const result = await wallet.createAction(args, origin)

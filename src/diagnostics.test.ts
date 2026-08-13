@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   describeDiagnosticError,
   sanitizeDiagnosticContext,
-  sanitizeDiagnosticText
+  sanitizeDiagnosticText,
+  walletTelemetryDiagnosticContext
 } from './diagnostics'
 
 describe('wallet diagnostics privacy boundary', () => {
@@ -46,5 +47,31 @@ describe('wallet diagnostics privacy boundary', () => {
     expect(result).not.toHaveProperty('message')
     expect(result).not.toHaveProperty('stack')
     expect(JSON.stringify(result)).not.toContain('password secret')
+  })
+
+  it('maps remote-storage telemetry into privacy-safe diagnostic fields', () => {
+    const context = walletTelemetryDiagnosticContext({
+      name: 'wallet.storage.rpc',
+      component: 'wallet-toolbox',
+      severity: 'info',
+      correlationId: 'storage-trace',
+      attributes: {
+        'rpc.method': 'createAction',
+        'rpc.request.encoding': 'binary-json',
+        'rpc.response.encoding': 'binary-json',
+        'request.size_bytes': 512,
+        'response.size_bytes': 128,
+        payload: 'must-not-be-forwarded'
+      }
+    } as never)
+
+    expect(context).toMatchObject({
+      rpcMethod: 'createAction',
+      rpcOutboundEncoding: 'binary-json',
+      rpcInboundEncoding: 'binary-json',
+      outboundSizeBytes: 512,
+      inboundSizeBytes: 128
+    })
+    expect(context).not.toHaveProperty('payload')
   })
 })

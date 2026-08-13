@@ -1,12 +1,21 @@
 import type { ChainTracker } from '@bsv/sdk';
-import * as Toolbox from '@bsv/wallet-toolbox-client';
-import type { Chain } from '@bsv/wallet-toolbox-client';
-
-interface ChaintracksClientApi extends ChainTracker {
-  startListening(): Promise<void>;
-  listening(): Promise<void>;
-  findHeaderForHeight(height: number): Promise<{ hash: string } | undefined>;
-}
+import {
+  ChaintracksServiceClient,
+  FixedWindowBulkFileDownloadBudget,
+  LocalChainTracker,
+  WhatsOnChainServices,
+  createIdbChaintracks,
+  wocGetHeadersHeaderToBlockHeader,
+  type BaseBlockHeader,
+  type BlockHeader,
+  type BulkFileDataCacheApi,
+  type BulkHeaderFileInfo,
+  type Chain,
+  type ChaintracksClientApi,
+  type ChaintracksInfoApi,
+  type HeaderListener,
+  type ReorgListener,
+} from '@bsv/wallet-toolbox-client';
 
 export type ChaintracksMode = 'local-primary' | 'remote-only';
 export type ChaintracksConsistency =
@@ -28,32 +37,7 @@ export interface ChaintracksDeviceStatus {
   lastError?: string;
 }
 
-interface ManagedLocalTracker extends ChainTracker {
-  getStatus?: () => Record<string, unknown>;
-  getMode?: () => ChaintracksMode;
-  setMode?: (mode: ChaintracksMode) => void;
-  synchronize?: () => Promise<Record<string, unknown>>;
-  checkConsistency?: () => Promise<Record<string, unknown>>;
-  clearLocalData?: () => Promise<Record<string, unknown>>;
-}
-
-interface CreatedLocal {
-  chaintracks: ChaintracksClientApi & {
-    destroy?: () => Promise<void>;
-    findChainTipHash?: () => Promise<string>;
-  };
-  storage?: {
-    db?: { close: () => void };
-    dbName?: string;
-  };
-  available: Promise<void>;
-}
-
-interface BulkFileDescriptor {
-  chain?: string;
-  fileName: string;
-  fileHash?: string;
-}
+type CreatedLocal = Awaited<ReturnType<typeof createIdbChaintracks>>;
 
 interface CheckpointManifest {
   checkpointHeight: number;
@@ -65,18 +49,108 @@ const MODE_KEY = 'chaintracks-mode-v1';
 const CACHE_NAME = 'chaintracks-bulk-v1';
 const SYNC_INTERVAL_MS = 60_000;
 const CONSISTENCY_INTERVAL_MS = 5 * 60_000;
-const ARCADE_URLS: Record<'main' | 'test', string> = {
-  main: 'https://arcade-v2-us-1.bsvblockchain.tech',
-  test: 'https://arcade-v2-testnet-us-1.bsvblockchain.tech',
-};
-
-const optionalToolboxExport = (name: string): unknown =>
-  (Toolbox as unknown as Record<string, unknown>)[name];
-
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-class PackagedCheckpointCache {
+class WhatsOnChainReference implements ChaintracksClientApi {
+  private readonly service: WhatsOnChainServices;
+
+  constructor(readonly chain: 'main' | 'test') {
+    this.service = new WhatsOnChainServices(
+      WhatsOnChainServices.createWhatsOnChainServicesOptions(chain)
+    );
+  }
+
+  currentHeight = async (): Promise<number> => await this.getPresentHeight();
+
+  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
+    return (await this.findHeaderForHeight(height))?.merkleRoot === root;
+  }
+
+  async getChain(): Promise<Chain> {
+    return this.chain;
+  }
+
+  async getInfo(): Promise<ChaintracksInfoApi> {
+    const height = await this.getPresentHeight();
+    return {
+      chain: this.chain,
+      heightBulk: height,
+      heightLive: height,
+      storage: 'whatsonchain-reference',
+      bulkIngestors: [],
+      liveIngestors: ['WhatsOnChainReference'],
+      packages: [],
+    };
+  }
+
+  async getPresentHeight(): Promise<number> {
+    return await this.service.getChainTipHeight();
+  }
+
+  async getHeaders(_height: number, _count: number): Promise<string> {
+    throw new Error('Bulk header downloads are not supported by the consistency reference.');
+  }
+
+  async findChainTipHeader(): Promise<BlockHeader> {
+    const headers = await this.service.getHeaders();
+    const tip = headers.sort((a, b) => b.height - a.height)[0];
+    if (tip == null) throw new Error('WhatsOnChain returned no tip headers.');
+    return wocGetHeadersHeaderToBlockHeader(tip);
+  }
+
+  async findChainTipHash(): Promise<string> {
+    return await this.service.getChainTipHash();
+  }
+
+  async findHeaderForHeight(height: number): Promise<BlockHeader | undefined> {
+    const header = (await this.service.getHeaders()).find((candidate) => candidate.height === height);
+    return header == null ? undefined : wocGetHeadersHeaderToBlockHeader(header);
+  }
+
+  async findHeaderForBlockHash(hash: string): Promise<BlockHeader | undefined> {
+    return await this.service.getHeaderByHash(hash);
+  }
+
+  async addHeader(_header: BaseBlockHeader): Promise<void> {
+    throw new Error('Adding headers is not supported by the consistency reference.');
+  }
+
+  async startListening(): Promise<void> {
+    await this.getPresentHeight();
+  }
+
+  async listening(): Promise<void> {
+    await this.getPresentHeight();
+  }
+
+  async isListening(): Promise<boolean> {
+    try {
+      await this.getPresentHeight();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async isSynchronized(): Promise<boolean> {
+    return await this.isListening();
+  }
+
+  async subscribeHeaders(_listener: HeaderListener): Promise<string> {
+    throw new Error('Header subscriptions are not supported by the consistency reference.');
+  }
+
+  async subscribeReorgs(_listener: ReorgListener): Promise<string> {
+    throw new Error('Reorg subscriptions are not supported by the consistency reference.');
+  }
+
+  async unsubscribe(_subscriptionId: string): Promise<boolean> {
+    return false;
+  }
+}
+
+class PackagedCheckpointCache implements BulkFileDataCacheApi {
   private manifest?: Promise<CheckpointManifest>;
 
   private async getManifest(): Promise<CheckpointManifest> {
@@ -90,12 +164,12 @@ class PackagedCheckpointCache {
     return await this.manifest;
   }
 
-  private cacheRequest(file: BulkFileDescriptor): Request {
+  private cacheRequest(file: Readonly<BulkHeaderFileInfo>): Request {
     const identity = encodeURIComponent(file.fileHash || file.fileName);
     return new Request(new URL(`/__chaintracks_bulk_cache__/${identity}`, window.location.origin));
   }
 
-  async get(file: BulkFileDescriptor): Promise<Uint8Array | undefined> {
+  async get(file: Readonly<BulkHeaderFileInfo>): Promise<Uint8Array | undefined> {
     if (file.chain === 'main') {
       const manifest = await this.getManifest();
       if (manifest.files.some((entry) => entry.fileName === file.fileName)) {
@@ -113,7 +187,7 @@ class PackagedCheckpointCache {
     return response == null ? undefined : new Uint8Array(await response.arrayBuffer());
   }
 
-  async set(file: BulkFileDescriptor, data: Uint8Array): Promise<void> {
+  async set(file: Readonly<BulkHeaderFileInfo>, data: Uint8Array): Promise<void> {
     if (typeof caches === 'undefined') return;
     await (
       await caches.open(CACHE_NAME)
@@ -123,155 +197,13 @@ class PackagedCheckpointCache {
     );
   }
 
-  async delete(file: BulkFileDescriptor): Promise<void> {
+  async delete(file: Readonly<BulkHeaderFileInfo>): Promise<void> {
     if (typeof caches === 'undefined') return;
     await (await caches.open(CACHE_NAME)).delete(this.cacheRequest(file));
   }
 
   async clear(): Promise<void> {
     if (typeof caches !== 'undefined') await caches.delete(CACHE_NAME);
-  }
-}
-
-class CompatibilityLocalTracker implements ManagedLocalTracker {
-  private mode: ChaintracksMode;
-  private status: Record<string, unknown>;
-
-  constructor(
-    private readonly local: ChaintracksClientApi,
-    private readonly fallbacks: ChaintracksClientApi[],
-    mode: ChaintracksMode
-  ) {
-    this.mode = mode;
-    this.status = {
-      mode,
-      activeSource: mode === 'remote-only' ? 'fallback' : 'local',
-      consistency: 'unchecked',
-    };
-  }
-
-  getMode(): ChaintracksMode {
-    return this.mode;
-  }
-
-  setMode(mode: ChaintracksMode): void {
-    this.mode = mode;
-    this.status = {
-      ...this.status,
-      mode,
-      activeSource: mode === 'remote-only' ? 'fallback' : 'local',
-    };
-  }
-
-  getStatus(): Record<string, unknown> {
-    return { ...this.status };
-  }
-
-  async currentHeight(): Promise<number> {
-    if (this.mode === 'remote-only') return await this.remoteHeight();
-    try {
-      return await this.local.currentHeight();
-    } catch {
-      return await this.remoteHeight();
-    }
-  }
-
-  async isValidRootForHeight(root: string, height: number): Promise<boolean> {
-    if (this.mode !== 'remote-only') {
-      try {
-        return await this.local.isValidRootForHeight(root, height);
-      } catch {
-        // Exceptional compatibility fallback only.
-      }
-    }
-    const results = await Promise.allSettled(
-      this.fallbacks.map((source) => source.isValidRootForHeight(root, height))
-    );
-    const votes = results.filter((result) => result.status === 'fulfilled' && result.value).length;
-    if (votes < Math.min(2, this.fallbacks.length)) {
-      throw new Error('Independent header references did not reach fallback agreement.');
-    }
-    return true;
-  }
-
-  async synchronize(): Promise<Record<string, unknown>> {
-    await this.local.startListening();
-    await this.local.listening();
-    return await this.checkConsistency();
-  }
-
-  async checkConsistency(): Promise<Record<string, unknown>> {
-    const localHeight = await this.local.currentHeight();
-    const localTip = await this.local.findHeaderForHeight(localHeight);
-    const references = (
-      await Promise.allSettled(
-        this.fallbacks.map(async (source) => {
-          const height = await source.currentHeight();
-          return { source, height };
-        })
-      )
-    )
-      .filter(
-        (
-          result
-        ): result is PromiseFulfilledResult<{ source: ChaintracksClientApi; height: number }> =>
-          result.status === 'fulfilled'
-      )
-      .map((result) => result.value);
-
-    if (references.length < 2) {
-      this.status = {
-        ...this.status,
-        localHeight,
-        localTipHash: localTip?.hash,
-        consistency: 'insufficient-references',
-        checkedAt: new Date().toISOString(),
-      };
-      return this.getStatus();
-    }
-
-    const referenceHeight = Math.min(...references.map((reference) => reference.height));
-    const comparisonHeight = Math.min(localHeight, referenceHeight);
-    const localAtComparison = await this.local.findHeaderForHeight(comparisonHeight);
-    const hashes = await Promise.all(
-      references.map(
-        async (reference) => (await reference.source.findHeaderForHeight(comparisonHeight))?.hash
-      )
-    );
-    const votes = new Map<string, number>();
-    for (const hash of hashes) if (hash != null) votes.set(hash, (votes.get(hash) || 0) + 1);
-    const expected = [...votes.entries()].sort((a, b) => b[1] - a[1])[0];
-    const lag = referenceHeight - localHeight;
-    const consistency: ChaintracksConsistency =
-      expected == null || expected[1] < 2
-        ? 'insufficient-references'
-        : localAtComparison?.hash !== expected[0]
-          ? 'diverged'
-          : lag > 6
-            ? 'lagging'
-            : 'agreed';
-
-    this.status = {
-      ...this.status,
-      localHeight,
-      localTipHash: localTip?.hash,
-      referenceHeight,
-      heightLag: lag,
-      consistency,
-      checkedAt: new Date().toISOString(),
-    };
-    return this.getStatus();
-  }
-
-  private async remoteHeight(): Promise<number> {
-    const results = await Promise.allSettled(
-      this.fallbacks.map((source) => source.currentHeight())
-    );
-    const heights = results
-      .filter((result): result is PromiseFulfilledResult<number> => result.status === 'fulfilled')
-      .map((result) => result.value);
-    if (heights.length === 0) throw new Error('No remote header reference is available.');
-    return Math.max(...heights);
   }
 }
 
@@ -291,7 +223,7 @@ class ChainTrackerProxy implements ChainTracker {
 }
 
 export class LocalChaintracksManager {
-  private tracker?: ManagedLocalTracker;
+  private tracker?: LocalChainTracker;
   private local?: CreatedLocal;
   private remote: ChaintracksClientApi[] = [];
   private proxy?: ChainTrackerProxy;
@@ -327,12 +259,14 @@ export class LocalChaintracksManager {
     if (this.status.chain !== chain) void this.ensure(chain);
     if (this.tracker != null) return this.tracker;
     if (this.remote.length === 0) this.remote = this.createRemoteReferences(chain);
-    return this.remote[0];
+    const fallback = this.remote[0];
+    if (fallback == null) throw new Error(`No ChainTracks source is configured for ${chain}.`);
+    return fallback;
   }
 
   async setMode(mode: ChaintracksMode): Promise<void> {
     localStorage.setItem(`${MODE_KEY}:${this.status.chain}`, mode);
-    this.tracker?.setMode?.(mode);
+    this.tracker?.setMode(mode);
     this.update({
       mode,
       activeSource: mode === 'remote-only' || this.tracker == null ? 'remote-fallback' : 'local',
@@ -385,16 +319,22 @@ export class LocalChaintracksManager {
   }
 
   private async ensure(chain: Chain): Promise<void> {
-    if (this.initializing != null && this.status.chain === chain) return await this.initializing;
+    while (this.initializing != null) await this.initializing;
     if (this.tracker != null && this.status.chain === chain) return;
-    this.initializing = this.initialize(chain).finally(() => {
-      this.initializing = undefined;
-    });
-    return await this.initializing;
+    const initialization = this.initialize(chain);
+    this.initializing = initialization;
+    try {
+      await initialization;
+    } finally {
+      if (this.initializing === initialization) this.initializing = undefined;
+    }
   }
 
   private async initialize(chain: Chain): Promise<void> {
     this.stopBackground();
+    const previous = this.local;
+    this.local = undefined;
+    this.tracker = undefined;
     this.remote = this.createRemoteReferences(chain);
     const storedMode = localStorage.getItem(`${MODE_KEY}:${chain}`);
     const mode: ChaintracksMode = storedMode === 'remote-only' ? 'remote-only' : 'local-primary';
@@ -411,26 +351,24 @@ export class LocalChaintracksManager {
       lastError: undefined,
     });
 
+    await previous?.chaintracks.destroy().catch(() => {});
+    previous?.storage.db?.close();
+
     try {
       const local = await this.createLocal(chain);
       await local.available;
-      const LocalTracker = optionalToolboxExport('Local' + 'ChainTracker') as
-        (new (options: unknown) => ManagedLocalTracker) | undefined;
-      this.tracker =
-        LocalTracker == null
-          ? new CompatibilityLocalTracker(local.chaintracks, this.remote, mode)
-          : new LocalTracker({
-              local: local.chaintracks,
-              fallbacks: this.remote,
-              mode,
-              fallbackOnLocalError: true,
-              requiredFallbackAgreement: 2,
-              requiredConsistencyAgreement: 2,
-              maxHeightLag: 6,
-              autoRecover: true,
-              recoverLocal: async () => (await this.recreateLocal(chain)).chaintracks,
-              clearLocal: async () => (await this.recreateLocal(chain)).chaintracks,
-            });
+      this.tracker = new LocalChainTracker({
+        local: local.chaintracks,
+        fallbacks: this.remote,
+        mode,
+        fallbackOnLocalError: true,
+        requiredFallbackAgreement: 2,
+        requiredConsistencyAgreement: 2,
+        maxHeightLag: 6,
+        autoRecover: true,
+        recoverLocal: async () => (await this.recreateLocal(chain)).chaintracks,
+        clearLocal: async () => (await this.recreateLocal(chain)).chaintracks,
+      });
       this.update({
         phase: 'ready',
         activeSource: mode === 'remote-only' ? 'remote-fallback' : 'local',
@@ -451,19 +389,14 @@ export class LocalChaintracksManager {
 
   private async createLocal(chain: Chain): Promise<CreatedLocal> {
     const cache = new PackagedCheckpointCache();
-    const Budget = optionalToolboxExport('FixedWindow' + 'BulkFileDownloadBudget') as
-      (new (options: { maxBytes: number; windowMsecs: number }) => unknown) | undefined;
     const sources = {
       bulkFileCache: cache,
-      bulkFileDownloadBudget:
-        Budget == null
-          ? undefined
-          : new Budget({ maxBytes: 32 * 1024 * 1024, windowMsecs: 60 * 60 * 1000 }),
+      bulkFileDownloadBudget: new FixedWindowBulkFileDownloadBudget({
+        maxBytes: 32 * 1024 * 1024,
+        windowMsecs: 60 * 60 * 1000,
+      }),
     };
-    const create = Toolbox.createIdbChaintracks as unknown as (
-      ...args: unknown[]
-    ) => Promise<CreatedLocal>;
-    const local = await create(
+    const local = await createIdbChaintracks(
       chain,
       '',
       100000,
@@ -494,24 +427,13 @@ export class LocalChaintracksManager {
 
   private createRemoteReferences(chain: Chain): ChaintracksClientApi[] {
     if (chain !== 'main' && chain !== 'test') return [];
-    const GoClient = Toolbox.GoChaintracksServiceClient as unknown as new (
-      chain: Chain,
-      url: string,
-      options: Record<string, unknown>
-    ) => ChaintracksClientApi;
     return [
-      new GoClient(chain, ARCADE_URLS[chain], {
-        apiPrefix: '/chaintracks/v2',
-        requestTimeoutMsecs: 15_000,
-      }),
-      new Toolbox.ChaintracksServiceClient(
-        chain,
-        `https://${chain}net-chaintracks.babbage.systems`
-      ),
+      new WhatsOnChainReference(chain),
+      new ChaintracksServiceClient(chain, `https://${chain}net-chaintracks.babbage.systems`),
     ];
   }
 
-  private async applyTrackerStatus(next: Record<string, unknown>): Promise<void> {
+  private async applyTrackerStatus(next: ReturnType<LocalChainTracker['getStatus']>): Promise<void> {
     let storage: StorageEstimate | undefined;
     try {
       storage = await navigator.storage?.estimate?.();
