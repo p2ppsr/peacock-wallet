@@ -52,7 +52,16 @@ import { getIdentityClient, getRegistryClient } from './utils/clientFactories'
 import { reconcileStoredKeyMaterial } from './utils/keyMaterial'
 import { listen } from '@tauri-apps/api/event'
 import type { ActivePromptSummary, WalletBridgeInspector } from './onWalletReady'
-import { reportDiagnosticError, reportDiagnosticEvent } from './diagnostics'
+import {
+  createWalletTelemetryConfig,
+  reportDiagnosticError,
+  reportDiagnosticEvent
+} from './diagnostics'
+import {
+  createStorageConnectionWarmer,
+  isOfficialStorageEndpoint,
+  type StorageConnectionWarmupReason
+} from './storageConnectionWarmup'
 
 // -----
 // Permission Configuration (User Wallet specific)
@@ -943,12 +952,38 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   const selectedNetwork = ACTIVE_WALLET_ENVIRONMENT.chain
   const selectedStorageUrl = ACTIVE_WALLET_ENVIRONMENT.storageUrl
   const [snapshotLoaded, setSnapshotLoaded] = useState<boolean>(false);
+  const storageConnectionWarmerRef = useRef<ReturnType<typeof createStorageConnectionWarmer> | undefined>(undefined)
+
+  const warmStorageConnection = useCallback((reason: StorageConnectionWarmupReason) => {
+    void storageConnectionWarmerRef.current?.warm(reason)
+  }, [])
+
+  useEffect(() => {
+    const handleFocus = () => warmStorageConnection('focus')
+    const handleOnline = () => warmStorageConnection('online')
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') warmStorageConnection('visible')
+    }
+
+    window.addEventListener('focus', handleFocus)
+    window.addEventListener('online', handleOnline)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('online', handleOnline)
+      document.removeEventListener('visibilitychange', handleVisibility)
+      storageConnectionWarmerRef.current?.clear()
+      storageConnectionWarmerRef.current = undefined
+    }
+  }, [warmStorageConnection])
 
   // Build wallet function
   const buildWallet = useCallback(async (
     primaryKey: number[],
     privilegedKeyManager: PrivilegedKeyManager
   ): Promise<any> => {
+    storageConnectionWarmerRef.current?.clear()
+    storageConnectionWarmerRef.current = undefined
     try {
       const newManagers = {} as any;
       const chain = selectedNetwork;
@@ -974,9 +1009,21 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       newManagers.settingsManager = wallet.settingsManager;
 
       // Use user-selected storage provider
-      const client = new StorageClient(wallet, selectedStorageUrl);
+      const client = new StorageClient(wallet, selectedStorageUrl, {
+        binaryRequests: isOfficialStorageEndpoint(selectedStorageUrl),
+        telemetry: createWalletTelemetryConfig()
+      });
       await client.makeAvailable();
       await storageManager.addWalletStorageProvider(client);
+      storageConnectionWarmerRef.current = createStorageConnectionWarmer(selectedStorageUrl, {
+        report: event => {
+          reportDiagnosticEvent('wallet.storage.connection_warmup', {
+            surface: 'wallet-performance',
+            severity: event.status === 'success' ? 'info' : 'warn',
+            context: event
+          })
+        }
+      })
 
       // Setup permissions with advanced configuration
       const permissionConfig = getPermissionConfigForMode();
@@ -1118,6 +1165,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
       return permissionsManager;
     } catch (error: any) {
+      storageConnectionWarmerRef.current?.clear()
+      storageConnectionWarmerRef.current = undefined
       console.error("Error building wallet:", error);
       reportDiagnosticError('wallet.build_failed', error, {
         surface: 'wallet-lifecycle',
@@ -1360,6 +1409,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   }, [markRegionCurrencyPrompted, regionCurrencyPromptSuggested, settings, updateSettings])
 
   const logout = useCallback(() => {
+    storageConnectionWarmerRef.current?.clear()
+    storageConnectionWarmerRef.current = undefined
     const preserved: Record<string, string> = {}
     const activeEnvironmentPrefix = walletEnvironmentStoragePrefix()
     const preserveLegacyMainnetUnlock = ACTIVE_WALLET_ENVIRONMENT.name !== 'mainnet'
@@ -1622,7 +1673,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
               spending: spending.length
             }
           },
-          getActivePromptSummary
+          getActivePromptSummary,
+          warmStorageConnection: () => warmStorageConnection('create-action')
         }
         const unlisten = await onWalletReady(interceptorWallet, inspector);
 
@@ -1659,7 +1711,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     managers?.walletManager?.authenticated,
     activeProfile?.id,
     getActivePromptSummary,
-    onWalletReady
+    onWalletReady,
+    warmStorageConnection
   ])
 
   useEffect(() => {
