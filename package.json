@@ -31,7 +31,7 @@
   "dependencies": {
     "@bsv/message-box-client": "2.4.0",
     "@bsv/sdk": "2.4.0",
-    "@bsv/wallet-toolbox-client": "2.8.0",
+    "@bsv/wallet-toolbox-client": "2.9.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^6.5.0",

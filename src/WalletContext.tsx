@@ -1012,7 +1012,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       const client = new StorageClient(wallet, selectedStorageUrl, {
         binaryRequests: isOfficialStorageEndpoint(selectedStorageUrl),
         telemetry: createWalletTelemetryConfig()
-      } as any);
+      });
       await client.makeAvailable();
       await storageManager.addWalletStorageProvider(client);
       storageConnectionWarmerRef.current = createStorageConnectionWarmer(selectedStorageUrl, {
