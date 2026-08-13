@@ -54,7 +54,7 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "7.18.2",
     "react-toastify": "^11.0.3",
-    "satoshi-shop-client": "^2.0.6",
+    "satoshi-shop-client": "^2.0.7",
     "use-async-effect": "^2.2.7"
   },
   "devDependencies": {
