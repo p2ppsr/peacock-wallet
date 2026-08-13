@@ -62,6 +62,7 @@ import {
   isOfficialStorageEndpoint,
   type StorageConnectionWarmupReason
 } from './storageConnectionWarmup'
+import { localChaintracksManager } from './chaintracks/localChaintracks'
 
 // -----
 // Permission Configuration (User Wallet specific)
@@ -1002,6 +1003,11 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       }
       if (ACTIVE_WALLET_ENVIRONMENT.arcadeUrl) {
         serviceOptions.arcadeUrl = ACTIVE_WALLET_ENVIRONMENT.arcadeUrl
+      }
+      // The packaged checkpoint and two-reference local verifier are mainnet-only.
+      // TerraTestNet keeps its explicitly configured CORS-safe remote verifier.
+      if (chain === 'main') {
+        serviceOptions.chainTracker = await localChaintracksManager.getChainTracker(chain)
       }
       const services = new Services(serviceOptions);
       const makeLogger = () => new WalletLogger()

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "chain": "main",
+  "checkpointHeight": 899999,
+  "headersPerFile": 100000,
+  "sourceUrl": "https://cdn.projectbabbage.com/blockheaders",
+  "files": [
+    {
+      "fileName": "mainNet_0.headers",
+      "firstHeight": 0,
+      "count": 100000,
+      "sha256Base64": "DMXYETHMphmYRh5y0+qsJhj67ML5Ui4LE1eEZDYbnZE="
+    },
+    {
+      "fileName": "mainNet_1.headers",
+      "firstHeight": 100000,
+      "count": 100000,
+      "sha256Base64": "IID8O84Uny22i10fWHTQr6f9+9eFZ8dhVyegYPGSg+Q="
+    },
+    {
+      "fileName": "mainNet_2.headers",
+      "firstHeight": 200000,
+      "count": 100000,
+      "sha256Base64": "wbfV/ZuPvLKHtRJN4QlHiKlpNncuqWA1dMJ6O9mhisc="
+    },
+    {
+      "fileName": "mainNet_3.headers",
+      "firstHeight": 300000,
+      "count": 100000,
+      "sha256Base64": "5pklz64as2MG6y9lQiiClZaA82f6xoK1xdzkSqOZLsA="
+    },
+    {
+      "fileName": "mainNet_4.headers",
+      "firstHeight": 400000,
+      "count": 100000,
+      "sha256Base64": "2X78/S+Z/h5ELA63aC3xt6/o4G8JMcAOEiZ00ycKHsM="
+    },
+    {
+      "fileName": "mainNet_5.headers",
+      "firstHeight": 500000,
+      "count": 100000,
+      "sha256Base64": "Tzm60n66tIuq7wNdP6M1BH77iFzGCPbOMIl6smJ/LRg="
+    },
+    {
+      "fileName": "mainNet_6.headers",
+      "firstHeight": 600000,
+      "count": 100000,
+      "sha256Base64": "O7SoyIDxhejB0Qs4rBO4OkfBK2yVZKhxra6YxZMhiIk="
+    },
+    {
+      "fileName": "mainNet_7.headers",
+      "firstHeight": 700000,
+      "count": 100000,
+      "sha256Base64": "+0Wu2GrKgCv4o1yZfdWl60aAgvBj6Rt3xlWj8TQprUw="
+    },
+    {
+      "fileName": "mainNet_8.headers",
+      "firstHeight": 800000,
+      "count": 100000,
+      "sha256Base64": "xKYCsMzfbWdwq6RtEos4+4w7F3FroFMXb4tk4Z2gn5s="
+    }
+  ]
+}
