@@ -1,4 +1,5 @@
 import packageJson from '../package.json'
+import type { TelemetryConfig, TelemetryEvent } from '@bsv/sdk'
 
 export const DIAGNOSTICS_ENABLED_STORAGE_KEY = 'user-wallet:diagnostics-enabled:v1'
 export const DIAGNOSTICS_PREFERENCE_EVENT = 'metanet-diagnostics-preference-changed'
@@ -60,6 +61,14 @@ function createId(prefix: string): string {
     return `${prefix}_${crypto.randomUUID()}`
   }
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`
+}
+
+function createTelemetryTraceId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '')
+  }
+  const part = () => Math.floor(Math.random() * 0x100000000).toString(16).padStart(8, '0')
+  return `${part()}${part()}${part()}${part()}`
 }
 
 function getAnonymousId(): string {
@@ -251,6 +260,75 @@ export function describeDiagnosticError(error: unknown): Record<string, unknown>
     })
   }
   return { errorName: 'NonError', failureClass: classifyDiagnosticFailure(String(error || '')) }
+}
+
+function diagnosticSeverityForTelemetry(event: Readonly<TelemetryEvent>): DiagnosticSeverity {
+  return event.severity === 'debug' ? 'info' : event.severity
+}
+
+function numericTelemetryAttribute(
+  attributes: Readonly<Record<string, unknown>>,
+  key: string
+): number | undefined {
+  const value = attributes[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function stringTelemetryAttribute(
+  attributes: Readonly<Record<string, unknown>>,
+  key: string
+): string | undefined {
+  const value = attributes[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+export function walletTelemetryDiagnosticContext(
+  event: Readonly<TelemetryEvent>
+): Record<string, unknown> {
+  const timed = event as TelemetryEvent & {
+    type?: unknown
+    durationMs?: unknown
+    spanStatus?: unknown
+  }
+  const attributes = event.attributes ?? {}
+  return {
+    component: event.component,
+    correlationId: event.correlationId,
+    telemetryType: typeof timed.type === 'string' ? timed.type : undefined,
+    telemetryDurationMs: typeof timed.durationMs === 'number' ? timed.durationMs : undefined,
+    telemetrySpanStatus: typeof timed.spanStatus === 'string' ? timed.spanStatus : undefined,
+    rpcMethod: stringTelemetryAttribute(attributes, 'rpc.method'),
+    rpcEncoding: stringTelemetryAttribute(attributes, 'rpc.encoding'),
+    rpcOutboundEncoding: stringTelemetryAttribute(attributes, 'rpc.request.encoding'),
+    rpcInboundEncoding: stringTelemetryAttribute(attributes, 'rpc.response.encoding'),
+    outboundSizeBytes: numericTelemetryAttribute(attributes, 'request.size_bytes'),
+    inboundSizeBytes: numericTelemetryAttribute(attributes, 'response.size_bytes'),
+    httpMethod: stringTelemetryAttribute(attributes, 'http.request.method'),
+    httpStatus: numericTelemetryAttribute(attributes, 'http.response.status_code'),
+    telemetryErrorName: event.error?.name,
+    telemetryErrorCode: event.error?.code
+  }
+}
+
+/**
+ * Adapts TS Stack's privacy-bounded wallet telemetry to Peacock's anonymous
+ * diagnostics pipeline. The diagnostics preference remains authoritative.
+ */
+export function createWalletTelemetryConfig(): TelemetryConfig {
+  return {
+    enabled: getDiagnosticsEnabled,
+    minimumSeverity: 'info',
+    traceIdFactory: createTelemetryTraceId,
+    sink: {
+      capture: (event: Readonly<TelemetryEvent>) => {
+        reportDiagnosticEvent(event.name, {
+          surface: 'wallet-toolbox',
+          severity: diagnosticSeverityForTelemetry(event),
+          context: walletTelemetryDiagnosticContext(event)
+        })
+      }
+    }
+  } as unknown as TelemetryConfig
 }
 
 function scheduleFlush(delay = FLUSH_DELAY_MS): void {
