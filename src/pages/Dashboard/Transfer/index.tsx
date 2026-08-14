@@ -38,6 +38,10 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import useAsyncEffect from 'use-async-effect'
 import { ExchangeRateContext } from '../../../components/AmountDisplay/ExchangeRateContextProvider'
 import { showSatoshiShopFundingModal, showSatoshiShopPendingTransactionsModal } from '../../Shop/shopModal'
+import {
+  assertPeerPayAcceptanceSucceeded,
+  PEER_PAY_ACCEPTANCE_ERROR_MESSAGE
+} from './peerPayAcceptance'
 
 export type PeerPayRouteProps = {
   defaultRecipient?: string
@@ -315,7 +319,7 @@ function PaymentForm({ peerPay, messageBoxHost, onSent, defaultRecipient, identi
         </Stack>
       </Stack>
 
-      <Grid container spacing={1} alignItems="center">
+      <Grid container spacing={1} alignItems="flex-start">
         <Grid item xs={12} sm={4}>
           <TextField
             select
@@ -459,18 +463,20 @@ function PaymentList({ payments, onRefresh, peerPay, loading, identityClient, me
     const id = String(p.messageId)
     setLoadingFor(id, 'accept')
     try {
-      await peerPay.acceptPayment(p)
+      const result = await peerPay.acceptPayment(p)
+      assertPeerPayAcceptanceSucceeded(result)
       return true
-    } catch (e1) {
-      toast.error('[Payments] acceptPayment failed, retrying…')
+    } catch (firstError) {
+      console.warn('[Payments] Payment acceptance failed; retrying refreshed message', firstError)
       try {
         const list = await peerPay.listIncomingPayments(messageBoxHost)
         const fresh = list.find(x => String(x.messageId) === id)
         if (!fresh) throw new Error('Payment not found on refresh')
-        await peerPay.acceptPayment(fresh)
+        const result = await peerPay.acceptPayment(fresh)
+        assertPeerPayAcceptanceSucceeded(result)
         return true
-      } catch (e2) {
-        toast.error('[Payments] Retry failed')
+      } catch (retryError) {
+        console.error('[Payments] Payment acceptance retry failed', retryError)
         return false
       }
     } finally {
@@ -481,7 +487,7 @@ function PaymentList({ payments, onRefresh, peerPay, loading, identityClient, me
   const accept = async (p: IncomingPayment) => {
     if (!peerPay) return
     const ok = await acceptWithRetry(p)
-    if (!ok) toast.error('Unable to receive payment')
+    if (!ok) toast.error(PEER_PAY_ACCEPTANCE_ERROR_MESSAGE)
     onRefresh()
   }
 

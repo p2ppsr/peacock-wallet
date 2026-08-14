@@ -1,5 +1,6 @@
 import { FC } from 'react';
-import { Typography, Button, Box } from '@mui/material';
+import { Typography, Button, Box, IconButton, Stack, Tooltip } from '@mui/material';
+import RefreshRoundedIcon from '@mui/icons-material/RefreshRounded';
 import Action from './Action';
 import { WalletAction } from '@bsv/sdk';
 import AppLogo from './AppLogo';
@@ -16,6 +17,7 @@ interface RecentActionsProps {
   displayLimit: number;
   setDisplayLimit: (limit: number) => void;
   setRefresh: (refresh: boolean) => void;
+  onRefresh?: () => void;
   allActionsShown?: boolean;
 }
 
@@ -25,18 +27,35 @@ const RecentActions: FC<RecentActionsProps> = ({
   displayLimit,
   setDisplayLimit,
   setRefresh,
+  onRefresh,
   allActionsShown = false,
 }) => {
   return (
     <div style={{ paddingTop: '1em' }}>
-      <Typography
-        variant="h3"
-        color="textPrimary"
-        gutterBottom
-        style={{ paddingBottom: '0.2em' }}
-      >
-        Recent Actions
-      </Typography>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+        <Typography
+          variant="h3"
+          color="textPrimary"
+          gutterBottom
+          style={{ paddingBottom: '0.2em' }}
+        >
+          Recent Actions
+        </Typography>
+        {onRefresh && (
+          <Tooltip title={loading ? 'Refreshing activity…' : 'Refresh activity'}>
+            <span>
+              <IconButton
+                aria-label="Refresh recent actions"
+                onClick={onRefresh}
+                disabled={loading}
+                size="small"
+              >
+                <RefreshRoundedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+      </Stack>
     {appActions?.length ? (
       appActions.map((action, idx) => {
         const actionToDisplay = {

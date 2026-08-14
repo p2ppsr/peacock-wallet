@@ -5,7 +5,6 @@ import style from '../../navigation/style';
 import {
   Typography,
   IconButton,
-  Toolbar,
   Button,
   DialogActions,
   Dialog,
@@ -226,24 +225,31 @@ export default function Dashboard() {
           </DialogActions>
         </Dialog>
               )}
-        {breakpoints.sm &&
-          <div style={{ padding: '0.5em 0 0 0.5em' }} ref={menuRef}>
-            <Toolbar>
-              <IconButton
-                edge='start'
-                onClick={() => setMenuOpen(menuOpen => !menuOpen)}
-                aria-label='menu'
-                sx={{
-                  color: 'primary.main',
-                  '&:hover': {
-                    backgroundColor: 'rgba(25, 118, 210, 0.1)',
-                  }
-                }}
-              >
-                <MenuIcon />
-              </IconButton>
-            </Toolbar>
-          </div>}
+        {!menuOpen && (
+          <Box
+            ref={menuRef}
+            sx={{ position: 'absolute', top: 10, left: 18, zIndex: 1300 }}
+          >
+            <IconButton
+              edge='start'
+              onClick={() => setMenuOpen(true)}
+              aria-label='Open navigation'
+              size='medium'
+              sx={{
+                width: 42,
+                height: 42,
+                color: 'primary.main',
+                backgroundColor: 'background.paper',
+                border: (muiTheme) => `1px solid ${muiTheme.palette.divider}`,
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                }
+              }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Box>
+        )}
       </div>
       <Menu menuOpen={menuOpen} setMenuOpen={setMenuOpen} menuRef={menuRef} />
       <Box sx={styles.page_container}>
