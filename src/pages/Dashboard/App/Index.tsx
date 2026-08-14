@@ -374,6 +374,11 @@ const App: React.FC = () => {
       setPage(next);
       fetchPage(next);
     },
+    onRefresh: () => {
+      if (isFetching) return
+      setPage(0)
+      void fetchPage(0)
+    },
     allActionsShown,
   }
 

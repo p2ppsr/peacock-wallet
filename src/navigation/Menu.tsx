@@ -82,7 +82,7 @@ export default function Menu({ menuOpen, setMenuOpen, menuRef }: MenuProps) {
       anchor="left"
       open={menuOpen}
       variant={isCompact ? 'temporary' : 'persistent'}
-      onClose={() => setMenuOpen(false)}
+      onClose={() => setMenuOpen(!isCompact)}
       ModalProps={{ keepMounted: true }}
       sx={(theme) => ({
         width: WALLET_NAV_WIDTH,
