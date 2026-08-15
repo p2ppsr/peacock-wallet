@@ -205,6 +205,7 @@ const AdvancedSettings: React.FC = () => {
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 3 }}>
         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
           <Typography variant="h4">Device Chain Verification</Typography>
+          <Chip size="small" color="warning" label="Experimental" />
           <Chip
             size="small"
             color={
@@ -216,10 +217,10 @@ const AdvancedSettings: React.FC = () => {
           />
         </Box>
         <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-          Verify proof of work against a persistent chain held on this device. A packaged checkpoint
-          through height {chainStatus.checkpointHeight.toLocaleString()} seeds the first run; new
-          headers remain synchronized in the background. Independent network references are used
-          only for consistency checks and exceptional fallback.
+          Remote ChainTracks is the stable default. Experimental local verification keeps a
+          persistent chain on this device, seeded by a packaged checkpoint through height{' '}
+          {chainStatus.checkpointHeight.toLocaleString()}. Local headers synchronize only when the
+          experimental mode is selected.
         </Typography>
 
         <RadioGroup
@@ -232,14 +233,14 @@ const AdvancedSettings: React.FC = () => {
           }
         >
           <FormControlLabel
-            value="local-primary"
-            control={<Radio />}
-            label="Local first (recommended)"
-          />
-          <FormControlLabel
             value="remote-only"
             control={<Radio />}
-            label="Remote compatibility mode"
+            label="Remote ChainTracks (recommended)"
+          />
+          <FormControlLabel
+            value="local-primary"
+            control={<Radio />}
+            label="Local ChainTracks (experimental)"
           />
         </RadioGroup>
 
@@ -286,14 +287,14 @@ const AdvancedSettings: React.FC = () => {
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
             variant="contained"
-            disabled={chainAction != null}
+            disabled={chainAction != null || chainStatus.mode !== 'local-primary'}
             onClick={() => void runChainAction('sync', () => localChaintracksManager.syncNow())}
           >
             Sync now
           </Button>
           <Button
             variant="outlined"
-            disabled={chainAction != null}
+            disabled={chainAction != null || chainStatus.mode !== 'local-primary'}
             onClick={() =>
               void runChainAction('consistency check', () =>
                 localChaintracksManager.checkConsistency()
@@ -305,7 +306,7 @@ const AdvancedSettings: React.FC = () => {
           <Button
             variant="outlined"
             color="warning"
-            disabled={chainAction != null}
+            disabled={chainAction != null || chainStatus.mode !== 'local-primary'}
             onClick={() => {
               if (
                 window.confirm(

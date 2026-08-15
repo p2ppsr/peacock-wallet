@@ -18,6 +18,10 @@ import {
 } from '@bsv/wallet-toolbox-client';
 
 export type ChaintracksMode = 'local-primary' | 'remote-only';
+export const DEFAULT_CHAINTRACKS_MODE: ChaintracksMode = 'remote-only';
+
+export const resolveChaintracksMode = (storedMode: string | null): ChaintracksMode =>
+  storedMode === 'local-primary' ? 'local-primary' : DEFAULT_CHAINTRACKS_MODE;
 export type ChaintracksConsistency =
   'unchecked' | 'agreed' | 'lagging' | 'diverged' | 'insufficient-references' | 'error';
 
@@ -234,7 +238,7 @@ export class LocalChaintracksManager {
   private subscribers = new Set<() => void>();
   private status: ChaintracksDeviceStatus = {
     chain: 'main',
-    mode: 'local-primary',
+    mode: DEFAULT_CHAINTRACKS_MODE,
     phase: 'idle',
     activeSource: 'remote-fallback',
     consistency: 'unchecked',
@@ -266,10 +270,25 @@ export class LocalChaintracksManager {
 
   async setMode(mode: ChaintracksMode): Promise<void> {
     localStorage.setItem(`${MODE_KEY}:${this.status.chain}`, mode);
-    this.tracker?.setMode(mode);
+    if (mode === this.status.mode) return;
+
+    if (mode === 'local-primary') {
+      this.update({ mode, phase: 'bootstrapping', activeSource: 'remote-fallback' });
+      await this.initialize(this.status.chain);
+      return;
+    }
+
+    this.stopBackground();
+    await this.local?.chaintracks.destroy().catch(() => {});
+    this.local?.storage.db?.close();
+    this.local = undefined;
+    this.tracker = undefined;
     this.update({
       mode,
-      activeSource: mode === 'remote-only' || this.tracker == null ? 'remote-fallback' : 'local',
+      phase: 'ready',
+      activeSource: 'remote-fallback',
+      consistency: 'unchecked',
+      lastError: undefined,
     });
   }
 
@@ -320,6 +339,11 @@ export class LocalChaintracksManager {
 
   private async ensure(chain: Chain): Promise<void> {
     while (this.initializing != null) await this.initializing;
+    if (
+      this.status.chain === chain &&
+      this.status.mode === 'remote-only' &&
+      this.status.phase === 'ready'
+    ) return;
     if (this.tracker != null && this.status.chain === chain) return;
     const initialization = this.initialize(chain);
     this.initializing = initialization;
@@ -337,7 +361,7 @@ export class LocalChaintracksManager {
     this.tracker = undefined;
     this.remote = this.createRemoteReferences(chain);
     const storedMode = localStorage.getItem(`${MODE_KEY}:${chain}`);
-    const mode: ChaintracksMode = storedMode === 'remote-only' ? 'remote-only' : 'local-primary';
+    const mode = resolveChaintracksMode(storedMode);
     this.update({
       chain,
       mode,
@@ -353,6 +377,11 @@ export class LocalChaintracksManager {
 
     await previous?.chaintracks.destroy().catch(() => {});
     previous?.storage.db?.close();
+
+    if (mode === 'remote-only') {
+      this.update({ phase: 'ready' });
+      return;
+    }
 
     try {
       const local = await this.createLocal(chain);
@@ -371,7 +400,7 @@ export class LocalChaintracksManager {
       });
       this.update({
         phase: 'ready',
-        activeSource: mode === 'remote-only' ? 'remote-fallback' : 'local',
+        activeSource: 'local',
       });
       this.startBackground();
       void this.syncNow();
