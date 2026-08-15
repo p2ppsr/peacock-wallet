@@ -1,6 +1,6 @@
 [package]
 name = "user-wallet"
-version = "0.8.3"
+version = "0.8.4"
 description = "An example desktop wallet"
 authors = ["you"]
 edition = "2021"
@@ -28,6 +28,7 @@ rustls-pemfile = "1.0"
 tokio-rustls = "0.24"
 image = { version = "0.24", default-features = false, features = ["png"] }
 libc = "0.2"
+tauri-plugin-single-instance = "2.4.3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2"
