@@ -14,7 +14,7 @@
 
 use std::{
     convert::Infallible,
-    net::SocketAddr,
+    net::TcpListener,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
@@ -238,7 +238,7 @@ async fn handle(
     }
 }
 
-pub fn spawn(app: &AppHandle) {
+pub fn spawn(app: &AppHandle, listener: TcpListener) {
     let state = app.state::<Arc<BinaryBridgeState>>().inner().clone();
     std::thread::spawn(move || {
         if let Err(err) = elevate_current_thread_priority() {
@@ -257,15 +257,15 @@ pub fn spawn(app: &AppHandle) {
             .expect("binary_bridge: failed to build Tokio runtime");
 
         rt.block_on(async move {
-            let addr: SocketAddr = "127.0.0.1:3301"
-                .parse()
-                .expect("binary_bridge: invalid socket address");
+            let addr = listener
+                .local_addr()
+                .expect("binary_bridge: reserved listener has no local address");
             println!("Binary HTTP server listening on http://{}", addr);
 
-            let builder = match Server::try_bind(&addr) {
+            let builder = match Server::from_tcp(listener) {
                 Ok(b) => b,
                 Err(err) => {
-                    eprintln!("binary_bridge: failed to bind on 3301: {}", err);
+                    eprintln!("binary_bridge: failed to use reserved listener: {}", err);
                     return;
                 }
             };

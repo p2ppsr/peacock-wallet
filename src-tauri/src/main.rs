@@ -9,7 +9,6 @@ use std::ffi::{c_void, CStr};
 use std::{
     convert::Infallible,
     env, fs,
-    net::SocketAddr,
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -50,6 +49,7 @@ use hyper::{
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tauri::{Emitter, Listener, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Window};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tokio::{net::TcpListener, sync::oneshot};
 use tokio_rustls::TlsAcceptor;
 use url::Url;
@@ -72,9 +72,13 @@ mod binary_bridge;
 mod origin;
 mod priority;
 mod tls;
+mod wallet_bridge_ports;
 use binary_bridge::BinaryBridgeState;
 use priority::{elevate_current_thread_priority, elevate_process_priority};
 use tls::ensure_localhost_tls;
+use wallet_bridge_ports::{
+    reserve_wallet_bridge_ports, WalletBridgeListeners, BRC100_WALLET_CONFLICT_MESSAGE,
+};
 
 // (no direct plugin imports; we call plugin initializers via fully-qualified paths)
 
@@ -109,7 +113,10 @@ fn install_native_crash_hook(app_handle: &AppHandle) {
         let location = panic_info.location();
         let report = PendingNativeCrashReport {
             kind: "panic".into(),
-            thread: std::thread::current().name().unwrap_or("unnamed").to_string(),
+            thread: std::thread::current()
+                .name()
+                .unwrap_or("unnamed")
+                .to_string(),
             file: location.and_then(|item| {
                 Path::new(item.file())
                     .file_name()
@@ -964,6 +971,14 @@ fn main() {
     }
 
     tauri::Builder::default()
+        // This must be the first plugin. Repeat launches focus the already-running
+        // wallet instead of creating a second window that competes for bridge ports.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window(MAIN_WINDOW_NAME) {
+                raise_window_for_user(&window, "Repeat application launch");
+            }
+        }))
+        .plugin(tauri_plugin_dialog::init())
         // === Keep app alive in tray when the user clicks the "X" ===
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -984,6 +999,34 @@ fn main() {
         })
         .setup(|app| {
             install_native_crash_hook(app.handle());
+
+            let bridge_listeners = match reserve_wallet_bridge_ports() {
+                Ok(listeners) => listeners,
+                Err(error) => {
+                    let (title, message) = if error.is_addr_in_use() {
+                        (
+                            "Another BRC100 wallet is already running",
+                            BRC100_WALLET_CONFLICT_MESSAGE.to_string(),
+                        )
+                    } else {
+                        (
+                            "Wallet bridge unavailable",
+                            format!("Peacock Wallet could not start its local wallet bridge: {error}"),
+                        )
+                    };
+                    app.dialog()
+                        .message(message)
+                        .title(title)
+                        .kind(MessageDialogKind::Error)
+                        .blocking_show();
+                    std::process::exit(0);
+                }
+            };
+            let WalletBridgeListeners {
+                binary: binary_listener,
+                json: json_listener,
+                https: https_listener,
+            } = bridge_listeners;
 
             // Extract the main window.
             let main_window = app.get_webview_window(MAIN_WINDOW_NAME).unwrap();
@@ -1057,7 +1100,7 @@ fn main() {
             // Binary ("cicada") substrate bridge state. Registered before spawning
             // the server so the frontend can attach its Channel as soon as it boots.
             app.manage(Arc::new(BinaryBridgeState::new()));
-            binary_bridge::spawn(&app.handle());
+            binary_bridge::spawn(&app.handle(), binary_listener);
 
             // Shared, concurrent map to store pending responses.
             let pending_requests: Arc<PendingMap> = Arc::new(DashMap::new());
@@ -1132,45 +1175,38 @@ fn main() {
                     .expect("Failed to create Tokio runtime");
 
                 rt.block_on(async move {
-                    // Bind the Hyper server to 127.0.0.1:3321.
-                    let addr: SocketAddr = "127.0.0.1:3321".parse().expect("Invalid socket address");
+                    let addr = json_listener
+                        .local_addr()
+                        .expect("reserved JSON bridge listener has no local address");
                     println!("HTTP server listening on http://{}", addr);
 
-                    // Attempt to bind the server and check for address in use error
-                    match Server::try_bind(&addr) {
-                        Ok(builder) => {
-                            // Create our Hyper service.
-                            let make_svc = make_service_fn(move |_conn| {
-                                // Clone handles for each connection.
-	                                let pending_requests = pending_requests_clone.clone();
-	                                let main_window = main_window_clone.clone();
-	                                let request_counter = request_counter_clone.clone();
-	                                let bridge_readiness = bridge_readiness_clone.clone();
-
-	                                async move {
-	                                    Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
-                                        handle_bridge_request(
-                                            req,
-	                                            pending_requests.clone(),
-	                                            main_window.clone(),
-	                                            request_counter.clone(),
-	                                            bridge_readiness.clone(),
-	                                        )
-	                                    }))
-	                                }
-                            });
-
-                            // Build and run the Hyper server.
-                            let server = builder.serve(make_svc);
-
-                            if let Err(e) = server.await {
-                                eprintln!("Server error: {}", e);
-                            }
+                    let builder = match Server::from_tcp(json_listener) {
+                        Ok(builder) => builder,
+                        Err(error) => {
+                            eprintln!("Failed to use reserved JSON bridge listener: {}", error);
+                            return;
                         }
-                        Err(e) => {
-                            eprintln!("Failed to bind server: {}", e);
-                            std::process::exit(1);
+                    };
+                    let make_svc = make_service_fn(move |_conn| {
+                        let pending_requests = pending_requests_clone.clone();
+                        let main_window = main_window_clone.clone();
+                        let request_counter = request_counter_clone.clone();
+                        let bridge_readiness = bridge_readiness_clone.clone();
+
+                        async move {
+                            Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
+                                handle_bridge_request(
+                                    req,
+                                    pending_requests.clone(),
+                                    main_window.clone(),
+                                    request_counter.clone(),
+                                    bridge_readiness.clone(),
+                                )
+                            }))
                         }
+                    });
+                    if let Err(error) = builder.serve(make_svc).await {
+                        eprintln!("Server error: {}", error);
                     }
                 });
             });
@@ -1202,14 +1238,15 @@ fn main() {
                         .expect("Failed to create Tokio runtime");
 
                     rt.block_on(async move {
-                        let addr: SocketAddr =
-                            "127.0.0.1:2121".parse().expect("Invalid TLS socket address");
+                        let addr = https_listener
+                            .local_addr()
+                            .expect("reserved HTTPS bridge listener has no local address");
                         println!("HTTPS server listening on https://{}", addr);
 
-                        let listener = match TcpListener::bind(addr).await {
+                        let listener = match TcpListener::from_std(https_listener) {
                             Ok(listener) => listener,
                             Err(err) => {
-                                eprintln!("Failed to bind HTTPS server: {}", err);
+                                eprintln!("Failed to use reserved HTTPS bridge listener: {}", err);
                                 return;
                             }
                         };
@@ -1279,7 +1316,6 @@ fn main() {
         binary_bridge::respond_binary
     ])
     .plugin(tauri_plugin_opener::init())
-    .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_updater::Builder::new().build())
     .run(tauri::generate_context!())
     .expect("Error while running Tauri application");
