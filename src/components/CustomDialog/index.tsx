@@ -21,6 +21,31 @@ interface CustomDialogProps extends DialogProps {
   icon?: ReactNode;
 }
 
+// Permission payloads can contain hashes, public keys, protocol IDs, and URLs
+// with no natural break points. Keep every nested flex item shrinkable and make
+// arbitrary text wrap before it can widen the dialog.
+export const overflowSafeDialogContentSx = {
+  minWidth: 0,
+  maxWidth: '100%',
+  overflowWrap: 'anywhere',
+  '& .MuiDialogContent-root, & .MuiDialogActions-root, & .MuiStack-root, & .MuiBox-root': {
+    minWidth: 0,
+    maxWidth: '100%'
+  },
+  '& .MuiTypography-root': {
+    minWidth: 0,
+    maxWidth: '100%',
+    overflowWrap: 'anywhere'
+  },
+  '& .MuiChip-root': {
+    maxWidth: '100%'
+  },
+  '& .MuiChip-label': {
+    overflow: 'hidden',
+    textOverflow: 'ellipsis'
+  }
+} as const;
+
 const CustomDialog: React.FC<CustomDialogProps> = ({ 
   title, 
   description,
@@ -42,13 +67,13 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
       className={className}
       {...props}
     >
-      <DialogTitle>
-        <Stack direction="row" spacing={1} alignItems="center">
-          {icon} <Typography variant="h5" fontWeight="bold">{title}</Typography>
+      <DialogTitle sx={{ minWidth: 0, maxWidth: '100%' }}>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: 0 }}>
+          {icon} <Typography variant="h5" fontWeight="bold" sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>{title}</Typography>
         </Stack>
       </DialogTitle>
-      {description && <Box sx={{ px: 5, py: 3 }}><Typography variant="body1" color="textSecondary">{description}</Typography></Box>}
-      <DialogContent>{children}</DialogContent>
+      {description && <Box sx={{ px: 5, py: 3, minWidth: 0 }}><Typography variant="body1" color="textSecondary" sx={{ overflowWrap: 'anywhere' }}>{description}</Typography></Box>}
+      <DialogContent sx={overflowSafeDialogContentSx}>{children}</DialogContent>
       {actions && (
         <DialogActions>
           {actions}
