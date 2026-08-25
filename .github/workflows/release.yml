@@ -200,7 +200,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: 1
         run: |
           ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage --icon-file=AppDir/usr/share/icons/hicolor/128x128/apps/user-wallet.png --desktop-file=AppDir/usr/share/applications/user-wallet.desktop
-          mv Peacock_Wallet-x86_64.AppImage user-wallet-x86_64.AppImage
+          mv Peacock_Wallet-x86_64.AppImage user-wallet-linux-x86_64.AppImage
 
       - name: Import GPG Key for Linux Signing
         if: matrix.platform == 'ubuntu-22.04'
@@ -219,12 +219,12 @@ jobs:
           export GPG_TTY=$(tty)
           # Get the key ID from the imported key
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
-          gpg --batch --yes --pinentry-mode loopback --local-user $KEY_ID --detach-sign --armor user-wallet-x86_64.AppImage
+          gpg --batch --yes --pinentry-mode loopback --local-user $KEY_ID --detach-sign --armor user-wallet-linux-x86_64.AppImage
 
       - name: Create and Sign SHA256SUMS
         if: matrix.platform == 'ubuntu-22.04'
         run: |
-          sha256sum user-wallet-x86_64.AppImage > SHA256SUMS
+          sha256sum user-wallet-linux-x86_64.AppImage > SHA256SUMS
           export GPG_TTY=$(tty)
           # Get the key ID from the imported key
           KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | head -1 | awk '{print $2}' | cut -d'/' -f2)
@@ -236,8 +236,8 @@ jobs:
         with:
           name: linux-artifacts
           path: |
-            user-wallet-x86_64.AppImage
-            user-wallet-x86_64.AppImage.asc
+            user-wallet-linux-x86_64.AppImage
+            user-wallet-linux-x86_64.AppImage.asc
             SHA256SUMS
             SHA256SUMS.asc
 
@@ -446,8 +446,8 @@ jobs:
               cp "$dmg_path" "release-uploads/user-wallet-macos-x64.dmg"
               ;;
             linux-x86_64)
-              cp user-wallet-x86_64.AppImage release-uploads/user-wallet-linux-x86_64.AppImage
-              cp user-wallet-x86_64.AppImage.asc release-uploads/user-wallet-linux-x86_64.AppImage.asc
+              cp user-wallet-linux-x86_64.AppImage release-uploads/user-wallet-linux-x86_64.AppImage
+              cp user-wallet-linux-x86_64.AppImage.asc release-uploads/user-wallet-linux-x86_64.AppImage.asc
               cp SHA256SUMS release-uploads/SHA256SUMS
               cp SHA256SUMS.asc release-uploads/SHA256SUMS.asc
               ;;
@@ -615,9 +615,9 @@ jobs:
             fi
           fi
           if [ -n "$extension" ]; then
-            dest_package="user-wallet-${UPDATER_TARGET}.${extension}"
+            dest_package="user-wallet-updater-${UPDATER_TARGET}.${extension}"
           else
-            dest_package="user-wallet-${UPDATER_TARGET}"
+            dest_package="user-wallet-updater-${UPDATER_TARGET}"
           fi
           dest_signature="${dest_package}.sig"
           cp "$selected_package" "release-uploads/updater/$dest_package"
@@ -713,7 +713,7 @@ jobs:
                           print(f\"Manifest {path.name} missing url or signature for {target}\", file=sys.stderr)
                           sys.exit(1)
                       filename = os.path.basename(url)
-                      final_url = f\"https://userwallet.getmetanet.com/{filename}\"
+                      final_url = f\"https://github.com/p2ppsr/peacock-wallet/releases/download/${{ needs.prepare-release.outputs.tag }}/{filename}\"
                       combined['platforms'][target] = {'url': final_url, 'signature': signature}
                       src = frontend / 'updater' / filename
                       dest = frontend / filename
@@ -793,82 +793,48 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         run: node scripts/check-release-version.js "$GITHUB_REF_NAME"
 
-      - name: Install CARS globally
-        run: npm i -g @p2ppsr/cars-cli@latest
-
-      - name: List frontend contents before CARS build
-        run: |
-          cd binaries-site
-          echo "=== binaries-site/frontend ==="
-          ls -R frontend
-
-      - name: Check CARS release wallet
+      - name: Stage GitHub Release assets and Pages site
         env:
-          CARS_PRIVATE_KEY: ${{ secrets.CARS_PRIVATE_KEY }}
-          CARS_WALLET_STORAGE: ${{ secrets.CARS_WALLET_STORAGE }}
-          CARS_REQUEST_TIMEOUT_MS: 300000
-          CARS_WALLET_STORAGE_TIMEOUT_MS: 120000
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
         run: |
-          set -euo pipefail
-          if [ -z "${CARS_PRIVATE_KEY:-}" ]; then
-            echo "CARS_PRIVATE_KEY repository secret is required." >&2
-            exit 1
-          fi
+          node scripts/stage-github-download-release.mjs \
+            --frontend binaries-site/frontend \
+            --output-root "$RUNNER_TEMP/github-download" \
+            --release-repo p2ppsr/peacock-wallet \
+            --release-tag "$RELEASE_TAG" \
+            --asset-prefix user-wallet \
+            --custom-domain userwallet.getmetanet.com
 
-          storage_args=()
-          if [ -n "${CARS_WALLET_STORAGE:-}" ]; then
-            storage_args=(--storage "$CARS_WALLET_STORAGE")
-          fi
-
-          cd binaries-site
-          cars doctor 0 --key "$CARS_PRIVATE_KEY" --network mainnet "${storage_args[@]}"
-          cars project ensure-balance 0 --key "$CARS_PRIVATE_KEY" --network mainnet "${storage_args[@]}" --min 1 --topup-to 250000
-
-      - name: Build and release artifact
-        env:
-          CARS_PRIVATE_KEY: ${{ secrets.CARS_PRIVATE_KEY }}
-          CARS_WALLET_STORAGE: ${{ secrets.CARS_WALLET_STORAGE }}
-          CARS_REQUEST_TIMEOUT_MS: 300000
-          CARS_WALLET_STORAGE_TIMEOUT_MS: 120000
-        run: |
-          set -euo pipefail
-          if [ -z "${CARS_PRIVATE_KEY:-}" ]; then
-            echo "CARS_PRIVATE_KEY repository secret is required." >&2
-            exit 1
-          fi
-
-          storage_args=()
-          if [ -n "${CARS_WALLET_STORAGE:-}" ]; then
-            storage_args=(--storage "$CARS_WALLET_STORAGE")
-          fi
-
-          cd binaries-site
-          cars build 0
-
-          for attempt in 1 2 3; do
-            log_file="cars-release-attempt-${attempt}.log"
-            set +e
-            cars release now 0 --key "$CARS_PRIVATE_KEY" --network mainnet "${storage_args[@]}" 2>&1 | tee "$log_file"
-            status=${PIPESTATUS[0]}
-            set -e
-            if [ "$status" -eq 0 ] && grep -q "CARS_RELEASE_SUCCESS" "$log_file"; then
-              exit 0
-            fi
-            if [ "$attempt" -eq 3 ]; then
-              if [ "$status" -eq 0 ]; then
-                echo "cars release exited successfully but did not emit CARS_RELEASE_SUCCESS." >&2
-                exit 1
-              fi
-              exit "$status"
-            fi
-            sleep "$((attempt * 20))"
-          done
-
-      - name: Publish canonical GitHub updater manifest
+      - name: Publish public GitHub Release assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
         run: |
-          cp binaries-site/frontend/manifest.json "$RUNNER_TEMP/latest.json"
-          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/latest.json" \
+          gh release upload "$RELEASE_TAG" \
+            "$RUNNER_TEMP/github-download/release-assets/"* \
             --repo "$GITHUB_REPOSITORY" --clobber
+
+      - name: Publish GitHub Pages site
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          pages_repo="$RUNNER_TEMP/pages-repo"
+          if ! git clone --depth 1 --branch gh-pages "https://github.com/$GITHUB_REPOSITORY.git" "$pages_repo"; then
+            git init --initial-branch=gh-pages "$pages_repo"
+            git -C "$pages_repo" remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          fi
+          rsync -a --delete --exclude .git \
+            "$RUNNER_TEMP/github-download/pages/" "$pages_repo/"
+          cd "$pages_repo"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "Pages site is already current."
+            exit 0
+          fi
+          git commit -m "Publish Peacock Wallet $RELEASE_TAG"
+          git push origin HEAD:gh-pages
