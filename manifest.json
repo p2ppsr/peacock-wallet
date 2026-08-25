@@ -1,0 +1,22 @@
+{
+  "platforms": {
+    "linux-x86_64": {
+      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-updater-linux-x86_64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINXJNT3JvbmN5c2JsNmNWYlZ1VWxseldCSWd4RFoyeG5oMWM4T0t6R0czTjVZS1dLVmtaV3lMSktCTjloN3o0dFVxaGdHT0FCVXoxRHRWTlhCVXo4Nmc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2ODM3NTQ5CWZpbGU6UGVhY29jayBXYWxsZXRfMC44LjRfYW1kNjQuQXBwSW1hZ2UKT1pmOGpaNlAyNUtVZW9NOXZzRmtWa2hSYjFwNVZWZnFGREQvV3hEZHY2OTdXYUVhU0JyVHNVYnpwdTZpM2lOS1p5SVlJTkowaFpZU3cvREM1Wi94QVE9PQo="
+    },
+    "darwin-aarch64": {
+      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-updater-darwin-aarch64.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINW91V3JVY2lYdzF3Q1BtTTUvUGRvZE9nNmk1bFoyQnoySUdVZ0c4S0lJZWl3UXB2YUhwWExWWW1mZW51ZlFQNHAyeVVwc0JKL1VMb0oyS3JFVk8zWndjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2ODM3MzA2CWZpbGU6UGVhY29jayBXYWxsZXQuYXBwLnRhci5negptR0VPNy9kTm5LMjZNUUl6R2NJckxSMFRPc09zZFVKSHVtcytjRGUvSGdFaDdieG40ZnYrNGlndmpLYm10QTF3b3hCMUMvMXluQkVndDVBZlB6aGtEQT09Cg=="
+    },
+    "darwin-x86_64": {
+      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-updater-darwin-x86_64.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINXNTS2JTUDROc3FnZTUzQkZWdzIzbFZLdkVXY2JrUEFvUVozR2ZoZW1PRzlXakF4SHF1ekxBZms5T2QzYlBmeWl5T1hwYndVaEJhN1cxR3JNclN5ZmdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2ODM3NDk3CWZpbGU6UGVhY29jayBXYWxsZXQuYXBwLnRhci5negp1MjVENkNqYlVNVzlWRFpOMWt6OTNSbWFLQndRSjFWR1ZpTE5Db0RUSitXNmUzMkdQRGxuT0NPR1ZmN0ZESzN0NzB2U1VBcTdJSlFtL0Z2SUtwQzhDdz09Cg=="
+    },
+    "windows-x86_64": {
+      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-updater-windows-x86_64.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINW4rWGRxbllPcXFCa2FNZkhzYUN6KzdYdjcrbnZtRDRsRUlJM0c4d3BpNExUdkoyMk9tSm9hTE0zQm93ek1vWlFYakJVbC9wSDFiMk9QMkZyVVh3Z3dzPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg2ODM3NDgyCWZpbGU6UGVhY29jayBXYWxsZXRfMC44LjRfeDY0LXNldHVwLmV4ZQo4SmwvdFo3RTA2eVB3YytmMDh0WEZhMkpvU3hSYk4zYjdQNkhhNU5YZUJQQm56S3F2a3UyNkZMclAyQWRzSmY2MHBlVXc3V2NJQnBReFlCMVE4NW1EUT09Cg=="
+    }
+  },
+  "version": "0.8.4",
+  "pub_date": "2026-08-15T23:46:42Z"
+}

@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#071817" />
+    <meta
+      name="description"
+      content="Peacock Wallet is an open-source desktop wallet for private identity, reviewed payments, and explicit app permissions."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Peacock Wallet — Make trust visible" />
+    <meta
+      property="og:description"
+      content="Your identity, payments, and app permissions—clear, inspectable, and under your control."
+    />
+    <meta property="og:image" content="https://userwallet.getmetanet.com/peacock-dashboard.png" />
+    <meta property="og:url" content="https://userwallet.getmetanet.com/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href="https://userwallet.getmetanet.com/" />
+    <link rel="manifest" href="./site.webmanifest" />
+    <link rel="icon" href="./app-icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./site.css" />
+    <title>Peacock Wallet — Make trust visible</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Peacock Wallet",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "macOS, Windows, Linux",
+        "softwareVersion": "v0.8.4",
+        "description": "An open-source desktop wallet for private identity, reviewed payments, and explicit app permissions.",
+        "downloadUrl": "https://userwallet.getmetanet.com/#downloads",
+        "codeRepository": "https://github.com/p2ppsr/peacock-wallet",
+        "license": "https://github.com/p2ppsr/peacock-wallet/blob/master/LICENSE"
+      }
+    </script>
+    <script defer src="./telemetry.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header" data-role="site-header">
+      <a class="brand" href="#top" aria-label="Peacock Wallet home">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M14 53C21 43 23 31 22 16c8 8 12 17 12 29" />
+          <path d="M32 52c1-13 7-25 18-35-2 15-8 26-18 35Z" />
+          <path d="M21 50c8-9 17-14 29-14-8 9-17 14-29 14Z" />
+          <path d="M28 53c-1-12 1-25 8-38 5 13 4 26-2 38" />
+          <circle cx="37" cy="22" r="5" />
+          <circle class="brand-eye" cx="37" cy="22" r="2" />
+        </svg>
+        <span>Peacock Wallet</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#why">Why Peacock</a>
+        <a href="#features">Features</a>
+        <a href="#downloads">Downloads</a>
+        <a
+          href="https://github.com/p2ppsr/peacock-wallet"
+          data-signal="marketing.github_clicked"
+          data-location="header"
+          >GitHub</a
+        >
+      </nav>
+      <a class="header-cta" href="#downloads">Download</a>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="status-dot"></span> Open source · Signed releases</p>
+          <h1 id="hero-title">Make trust <em>visible.</em></h1>
+          <p class="hero-lede">
+            Peacock Wallet puts identity, payments, and app permissions in one calm, inspectable place—so
+            you can see what you are approving before anything happens.
+          </p>
+          <div class="hero-actions">
+            <a
+              id="primary-download"
+              class="button button-primary"
+              href="#downloads"
+              data-signal="marketing.primary_cta_clicked"
+              data-location="hero"
+            >
+              Find your download
+              <span aria-hidden="true">↓</span>
+            </a>
+            <a
+              class="button button-secondary"
+              href="https://github.com/p2ppsr/peacock-wallet"
+              data-signal="marketing.github_clicked"
+              data-location="hero"
+            >
+              View source on GitHub
+              <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+          <ul class="proof-list" aria-label="Product assurances">
+            <li>Keys stay local</li>
+            <li>Permissions are explicit</li>
+            <li>Updates are signed</li>
+          </ul>
+        </div>
+
+        <div class="product-stage" aria-label="Peacock Wallet application preview">
+          <div class="stage-glow stage-glow-one"></div>
+          <div class="stage-glow stage-glow-two"></div>
+          <div class="app-window">
+            <div class="window-bar" aria-hidden="true">
+              <span></span><span></span><span></span>
+              <strong>Peacock Wallet</strong>
+            </div>
+            <img
+              src="./peacock-dashboard.png"
+              alt="Peacock Wallet overview showing quick actions and connected apps"
+              width="1245"
+              height="768"
+            />
+          </div>
+          <div class="floating-note floating-note-trust">
+            <span class="note-icon">✓</span>
+            <span><strong>Inspectable trust</strong>Every grant stays visible</span>
+          </div>
+          <div class="floating-note floating-note-control">
+            <span class="note-icon">⌁</span>
+            <span><strong>Your keys</strong>Local and recoverable</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="principle section" id="why" aria-labelledby="principle-title">
+        <div class="section-heading principle-heading">
+          <p class="eyebrow">The idea behind the name</p>
+          <h2 id="principle-title">A credible signal should be hard to fake.</h2>
+        </div>
+        <div class="principle-copy">
+          <p>
+            In the handicap principle, a signal earns trust because producing it carries a real cost. A
+            peacock’s display is the classic image: conspicuous, inspectable, and difficult to counterfeit.
+          </p>
+          <p>
+            Peacock Wallet applies that standard to software. Identity is cryptographically verifiable,
+            permissions are shown before they are granted, and payments are reviewed before they are signed.
+            Trust comes from evidence—not a promise hidden behind a button.
+          </p>
+        </div>
+      </section>
+
+      <section class="features section" id="features" aria-labelledby="features-title">
+        <div class="section-heading centered">
+          <p class="eyebrow">One wallet, fewer mysteries</p>
+          <h2 id="features-title">Know what is happening at every step.</h2>
+          <p>Peacock keeps powerful wallet capabilities understandable without hiding the important parts.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card feature-card-large">
+            <span class="feature-number">01</span>
+            <div class="feature-icon" aria-hidden="true">◎</div>
+            <h3>Private identity</h3>
+            <p>Present only the certificate or identity attribute an app needs. Your private keys never leave the wallet.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-number">02</span>
+            <div class="feature-icon" aria-hidden="true">↗</div>
+            <h3>Reviewed payments</h3>
+            <p>See the amount, destination, and requesting app before you authorize a payment.</p>
+          </article>
+          <article class="feature-card">
+            <span class="feature-number">03</span>
+            <div class="feature-icon" aria-hidden="true">⌘</div>
+            <h3>Explicit permissions</h3>
+            <p>Understand what each connected app can do, then review or revoke access from one place.</p>
+          </article>
+          <article class="feature-card feature-card-wide">
+            <span class="feature-number">04</span>
+            <div>
+              <div class="feature-icon" aria-hidden="true">◇</div>
+              <h3>Open and inspectable</h3>
+              <p>The source, release history, signatures, and integrity files are public. You do not have to take our word for it.</p>
+            </div>
+            <a
+              class="text-link"
+              href="https://github.com/p2ppsr/peacock-wallet"
+              data-signal="marketing.github_clicked"
+              data-location="features"
+              >Inspect the source <span aria-hidden="true">↗</span></a
+            >
+          </article>
+        </div>
+      </section>
+
+      <section class="steps section" aria-labelledby="steps-title">
+        <div class="section-heading centered">
+          <p class="eyebrow">From download to useful</p>
+          <h2 id="steps-title">Start in three clear steps.</h2>
+        </div>
+        <ol class="step-list">
+          <li>
+            <span class="step-marker">1</span>
+            <h3>Install Peacock</h3>
+            <p>Choose the signed build for macOS, Windows, or Linux.</p>
+          </li>
+          <li>
+            <span class="step-marker">2</span>
+            <h3>Create or restore</h3>
+            <p>Generate a new recovery key or restore the wallet you already own.</p>
+          </li>
+          <li>
+            <span class="step-marker">3</span>
+            <h3>Connect deliberately</h3>
+            <p>Open compatible apps and approve only the permissions you understand.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="downloads section" id="downloads" aria-labelledby="downloads-title">
+        <div class="download-heading">
+          <div>
+            <p class="eyebrow">Desktop downloads</p>
+            <h2 id="downloads-title">Choose your platform.</h2>
+            <p id="detected-os" class="detected" hidden>
+              We detected <strong id="detected-os-name"></strong> and highlighted the closest match.
+            </p>
+          </div>
+          <div class="release-badge">
+            <span>Latest stable</span>
+            <strong>v0.8.4</strong>
+            <small>Released <time datetime="2026-08-15">2026-08-15</time></small>
+          </div>
+        </div>
+
+        <div class="download-grid">
+          <article class="download-card" data-card-os="macos">
+            <div class="platform-heading">
+              <div class="platform-icon" aria-hidden="true">●</div>
+              <div><h3>macOS</h3><p>macOS 11 or newer</p></div>
+            </div>
+            <div class="download-actions">
+              <a
+                class="download-link"
+                data-download
+                data-os="macos"
+                data-arch="arm64"
+                data-asset="dmg"
+                href="https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-macos-arm64.dmg"
+                download
+              >
+                <span>Apple Silicon</span><small>DMG · arm64</small><b aria-hidden="true">↓</b>
+              </a>
+              <a
+                class="download-link"
+                data-download
+                data-os="macos"
+                data-arch="x64"
+                data-asset="dmg"
+                href="https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-macos-x64.dmg"
+                download
+              >
+                <span>Intel Macs</span><small>DMG · x64</small><b aria-hidden="true">↓</b>
+              </a>
+            </div>
+          </article>
+
+          <article class="download-card" data-card-os="windows">
+            <div class="platform-heading">
+              <div class="platform-icon platform-icon-windows" aria-hidden="true">⊞</div>
+              <div><h3>Windows</h3><p>Windows 10 or newer</p></div>
+            </div>
+            <div class="download-actions">
+              <a
+                class="download-link"
+                data-download
+                data-os="windows"
+                data-arch="x64"
+                data-asset="msi"
+                href="https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-windows-x64.msi"
+                download
+              >
+                <span>MSI installer</span><small>Signed · x64</small><b aria-hidden="true">↓</b>
+              </a>
+              <a
+                class="download-link"
+                data-download
+                data-os="windows"
+                data-arch="x64"
+                data-asset="exe"
+                href="https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-windows-x64.exe"
+                download
+              >
+                <span>EXE installer</span><small>Signed · x64</small><b aria-hidden="true">↓</b>
+              </a>
+            </div>
+          </article>
+
+          <article class="download-card" data-card-os="linux">
+            <div class="platform-heading">
+              <div class="platform-icon platform-icon-linux" aria-hidden="true">◆</div>
+              <div><h3>Linux</h3><p>64-bit distributions</p></div>
+            </div>
+            <div class="download-actions">
+              <a
+                class="download-link"
+                data-download
+                data-os="linux"
+                data-arch="x86_64"
+                data-asset="appimage"
+                href="https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-x86_64.AppImage"
+                download
+              >
+                <span>AppImage</span><small>Portable · x86_64</small><b aria-hidden="true">↓</b>
+              </a>
+              <a
+                class="download-link quiet"
+                data-signal="marketing.integrity_clicked"
+                data-location="linux-card"
+                href="https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/SHA256SUMS"
+                download
+              >
+                <span>SHA-256 checksums</span><b aria-hidden="true">↓</b>
+              </a>
+            </div>
+          </article>
+        </div>
+
+        <div class="integrity-panel">
+          <div>
+            <p class="eyebrow">Verify before you trust</p>
+            <h3>Every release has an audit trail.</h3>
+            <p>Linux packages include detached GPG signatures and signed checksums. App updates use Tauri signatures, and Windows installers are Authenticode-signed.</p>
+          </div>
+          <div class="integrity-links">
+            <a href="https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/SHA256SUMS" download data-signal="marketing.integrity_clicked" data-location="integrity">Checksums</a>
+            <a href="https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/SHA256SUMS.asc" download data-signal="marketing.integrity_clicked" data-location="integrity">Checksums signature</a>
+            <a href="https://github.com/p2ppsr/peacock-wallet/releases/download/v0.8.4/user-wallet-x86_64.AppImage.asc" download data-signal="marketing.integrity_clicked" data-location="integrity">Linux signature</a>
+            <a
+              href="https://github.com/p2ppsr/peacock-wallet/releases"
+              data-signal="marketing.github_clicked"
+              data-location="integrity"
+              >Release history ↗</a
+            >
+          </div>
+        </div>
+      </section>
+
+      <section class="open-source section" aria-labelledby="open-title">
+        <div class="open-source-mark" aria-hidden="true">〈/〉</div>
+        <div>
+          <p class="eyebrow">Open source by design</p>
+          <h2 id="open-title">Trust the evidence. Improve the product.</h2>
+          <p>
+            Read the code, audit the release workflow, report a problem, or contribute a better idea. Peacock’s
+            public development history is part of its security model.
+          </p>
+        </div>
+        <div class="open-source-actions">
+          <a
+            class="button button-primary"
+            href="https://github.com/p2ppsr/peacock-wallet"
+            data-signal="marketing.github_clicked"
+            data-location="open-source"
+            >Explore GitHub <span aria-hidden="true">↗</span></a
+          >
+          <a
+            class="text-link"
+            href="https://github.com/p2ppsr/peacock-wallet/issues"
+            data-signal="marketing.github_clicked"
+            data-location="open-source-issues"
+            >Report an issue <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-brand">
+        <strong>Peacock Wallet</strong>
+        <p>Identity and payments, made inspectable.</p>
+      </div>
+      <div class="footer-links">
+        <a href="#downloads">Downloads</a>
+        <a href="https://github.com/p2ppsr/peacock-wallet">GitHub</a>
+        <a href="https://github.com/p2ppsr/peacock-wallet/releases">Releases</a>
+        <a href="#privacy">Privacy</a>
+      </div>
+      <div class="privacy-note" id="privacy">
+        <strong>Privacy-bounded measurement</strong>
+        <p>
+          This site sends privacy-bounded, session-only page and click signals to UserCom. It uses no analytics
+          cookies, wallet data, form data, or cross-session identifier, and respects Global Privacy Control and
+          Do Not Track.
+        </p>
+      </div>
+      <p class="copyright">© <span id="copyright-year">2026</span> Peer-to-peer Privacy Systems Research, LLC.</p>
+    </footer>
+
+    <noscript><p class="noscript">JavaScript is optional. Downloads and project links remain fully available.</p></noscript>
+  </body>
+</html>
