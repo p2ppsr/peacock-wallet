@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Download moved</title>
+  </head>
+  <body>
+    <main>
+      <h1>Download moved</h1>
+      <p id="message">This address is no longer used for binary storage.</p>
+      <p><a id="download-link" href="/">Open the current download page</a></p>
+    </main>
+    <script>
+      (() => {
+        const redirects = {"/latest.json":"latest.json","/SHA256SUMS":"SHA256SUMS","/SHA256SUMS.asc":"SHA256SUMS.asc","/updater/user-wallet-darwin-aarch64.tar.gz":"user-wallet-updater-darwin-aarch64.tar.gz","/updater/user-wallet-darwin-x86_64.tar.gz":"user-wallet-updater-darwin-x86_64.tar.gz","/updater/user-wallet-linux-x86_64.AppImage":"user-wallet-updater-linux-x86_64.AppImage","/updater/user-wallet-windows-x86_64.exe":"user-wallet-updater-windows-x86_64.exe","/user-wallet-linux-x86_64.AppImage":"user-wallet-x86_64.AppImage","/user-wallet-linux-x86_64.AppImage.asc":"user-wallet-x86_64.AppImage.asc","/user-wallet-macos-arm64.dmg":"user-wallet-macos-arm64.dmg","/user-wallet-macos-x64.dmg":"user-wallet-macos-x64.dmg","/user-wallet-updater-darwin-aarch64.tar.gz":"user-wallet-updater-darwin-aarch64.tar.gz","/user-wallet-updater-darwin-x86_64.tar.gz":"user-wallet-updater-darwin-x86_64.tar.gz","/user-wallet-updater-linux-x86_64.AppImage":"user-wallet-updater-linux-x86_64.AppImage","/user-wallet-updater-windows-x86_64.exe":"user-wallet-updater-windows-x86_64.exe","/user-wallet-windows-x64.exe":"user-wallet-windows-x64.exe","/user-wallet-windows-x64.msi":"user-wallet-windows-x64.msi","/user-wallet-x86_64.AppImage":"user-wallet-x86_64.AppImage","/user-wallet-x86_64.AppImage.asc":"user-wallet-x86_64.AppImage.asc"};
+        let requestPath = window.location.pathname;
+        try { requestPath = decodeURIComponent(requestPath); } catch {}
+        const filename = redirects[requestPath];
+        if (!filename) return;
+        const target = "https://github.com/p2ppsr/peacock-wallet/releases/latest/download" + '/' + encodeURIComponent(filename);
+        const link = document.getElementById('download-link');
+        link.href = target;
+        link.textContent = 'Continue to the download';
+        document.getElementById('message').textContent = 'Redirecting to GitHub Releases…';
+        window.location.replace(target);
+      })();
+    </script>
+  </body>
+</html>
