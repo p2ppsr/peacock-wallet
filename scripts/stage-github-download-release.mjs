@@ -40,6 +40,8 @@ fs.cpSync(frontend, pagesDir, { recursive: true })
 fs.mkdirSync(releaseDir, { recursive: true })
 
 const releaseBase = `https://github.com/${releaseRepo}/releases/download/${releaseTag}`
+const latestReleaseBase = `https://github.com/${releaseRepo}/releases/latest/download`
+const legacyRedirects = new Map()
 const fragmentNames = fs.readdirSync(pagesDir).filter(name => /^manifest-.*\.json$/.test(name)).sort()
 let manifest
 
@@ -70,6 +72,7 @@ if (fragmentNames.length > 0) {
         `Unexpected updater filename ${filename} for ${target}`
       )
       fs.copyFileSync(source, path.join(pagesDir, releaseFilename))
+      legacyRedirects.set(`/updater/${filename}`, releaseFilename)
       manifest.platforms[target] = {
         url: `${releaseBase}/${encodeURIComponent(releaseFilename)}`,
         signature: payload.signature
@@ -132,6 +135,11 @@ for (const entry of fs.readdirSync(pagesDir, { withFileTypes: true })) {
 
 assert.ok(releaseAssets.length >= 10, `Expected at least 10 release assets, found ${releaseAssets.length}`)
 
+for (const filename of releaseAssets) {
+  legacyRedirects.set(`/${filename}`, releaseLinkOverrides.get(filename) ?? filename)
+}
+legacyRedirects.set('/latest.json', 'latest.json')
+
 const manifestPath = path.join(pagesDir, 'manifest.json')
 assert.ok(manifest.platforms && Object.keys(manifest.platforms).length >= 4, 'Updater manifest is incomplete')
 
@@ -158,8 +166,45 @@ for (const filename of releaseAssets) {
 }
 
 fs.copyFileSync(manifestPath, path.join(releaseDir, 'latest.json'))
+const redirectEntries = Object.fromEntries([...legacyRedirects].sort(([left], [right]) => left.localeCompare(right)))
+const redirectPage = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Download moved</title>
+  </head>
+  <body>
+    <main>
+      <h1>Download moved</h1>
+      <p id="message">This address is no longer used for binary storage.</p>
+      <p><a id="download-link" href="/">Open the current download page</a></p>
+    </main>
+    <script>
+      (() => {
+        const redirects = ${JSON.stringify(redirectEntries)};
+        let requestPath = window.location.pathname;
+        try { requestPath = decodeURIComponent(requestPath); } catch {}
+        const filename = redirects[requestPath];
+        if (!filename) return;
+        const target = ${JSON.stringify(latestReleaseBase)} + '/' + encodeURIComponent(filename);
+        const link = document.getElementById('download-link');
+        link.href = target;
+        link.textContent = 'Continue to the download';
+        document.getElementById('message').textContent = 'Redirecting to GitHub Releases…';
+        window.location.replace(target);
+      })();
+    </script>
+  </body>
+</html>
+`
+fs.writeFileSync(path.join(pagesDir, '404.html'), redirectPage)
 fs.writeFileSync(path.join(pagesDir, 'CNAME'), `${customDomain}\n`)
 fs.writeFileSync(path.join(pagesDir, '.nojekyll'), '')
+
+for (const [legacyPath, releaseFilename] of legacyRedirects) {
+  assert.equal(redirectEntries[legacyPath], releaseFilename, `Missing compatibility redirect for ${legacyPath}`)
+}
 
 console.log(`Staged ${releaseAssets.length} GitHub Release assets in ${releaseDir}`)
 console.log(`Staged GitHub Pages site in ${pagesDir}`)
