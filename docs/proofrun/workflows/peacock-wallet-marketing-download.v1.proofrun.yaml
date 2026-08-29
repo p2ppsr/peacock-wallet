@@ -1,0 +1,160 @@
+apiVersion: proofrun.dev/v1
+kind: Workflow
+metadata:
+  id: peacock-wallet-marketing-download
+  name: Peacock Wallet marketing-to-download conversion
+  version: 1.0.0
+  description: Desktop users looking for a transparent identity and payments wallet.
+  labels:
+    migration: proofrunVersion-1
+    repository: p2ppsr/peacock-wallet
+    category: onboard
+target:
+  type: web
+  url: https://userwallet.getmetanet.com
+  environment: production
+matrix:
+  maxCases: 2
+  exclude:
+    - {}
+  include:
+    - agent: openai-computer
+      profile: customer.impatient-newcomer@1.0.0
+      accessibility: standard
+      device: device.chromium-desktop@1.0.0
+      legacyDesktopBrowser: chrome
+      legacyNetworks: mainnet
+    - agent: openai-computer
+      profile: customer.impatient-newcomer@1.0.0
+      accessibility: standard
+      device: device.webkit-mobile@1.0.0
+      legacyMobileBrowser: responsive-browser-smoke
+      legacyNetworks: mainnet
+capabilities:
+  - browser
+journeys:
+  - id: onboard
+    goal: Peacock Wallet marketing-to-download conversion
+    role: Desktop users looking for a transparent identity and payments wallet.
+    maxActions: 24
+    maxSeconds: 90
+    steps:
+      - id: open-marketing-site
+        instruction: Open the Peacock Wallet home page.
+        expected: "UI: The wallet purpose, inspectable-trust position, and primary download action are clear above the fold. Telemetry: marketing.page_view is emitted with privacy-bounded session context."
+        evidence:
+          - screenshot
+          - trace
+          - log
+          - metric
+        onFailure: stop
+      - id: inspect-product-and-trust
+        instruction: Review the product preview, handicap-principle explanation, features, and integrity information.
+        expected: "UI: Identity, payments, permissions, open source, signatures, and platform support are understandable without maintainer knowledge."
+        evidence:
+          - screenshot
+          - trace
+          - metric
+        onFailure: stop
+      - id: choose-download
+        instruction: Use the detected recommendation or select a platform-specific signed installer.
+        expected: "UI: The correct platform card and installer type are obvious. Domain: The selected canonical release asset returns HTTP 200. Telemetry: marketing.primary_cta_clicked or marketing.download_clicked is emitted with target platform and no wallet identity."
+        evidence:
+          - screenshot
+          - trace
+          - log
+          - metric
+        onFailure: stop
+      - id: inspect-source
+        instruction: Open the canonical GitHub repository from the marketing site.
+        expected: "Domain: GitHub resolves to p2ppsr/peacock-wallet. Telemetry: marketing.github_clicked is emitted."
+        evidence:
+          - screenshot
+          - trace
+          - log
+          - metric
+        onFailure: stop
+assertions:
+  - id: uiappearance-1
+    type: visual
+    severity: fail
+    statement: Desktop and narrow layouts are usable with no clipped or overlapping content.
+  - id: uiappearance-2
+    type: visual
+    severity: fail
+    statement: Focus indicators and reduced-motion behavior are present.
+  - id: audienceintuition-1
+    type: agent
+    severity: fail
+    statement: A new user can explain what Peacock Wallet does and choose the correct download.
+  - id: customertrust-1
+    type: security
+    severity: fail
+    statement: The site distinguishes inspectable evidence from marketing claims.
+  - id: customertrust-2
+    type: security
+    severity: fail
+    statement: Signing, source, compatibility, and telemetry practices are disclosed.
+  - id: flowsuccess-1
+    type: oracle
+    severity: fail
+    statement: The recommended and manual download URLs resolve to the current release artifacts.
+  - id: flowsuccess-2
+    type: oracle
+    severity: fail
+    statement: The GitHub and release-history links resolve to the canonical renamed repository.
+  - id: telemetryobservability-1
+    type: oracle
+    severity: fail
+    statement: Expected marketing events are queryable in UserCom under source=peacock-wallet and surface=marketing-site.
+  - id: telemetryobservability-2
+    type: oracle
+    severity: fail
+    statement: Signals contain no wallet identity, key material, form data, URL query, or cross-session identifier.
+  - id: reliabilityrepeatability-1
+    type: oracle
+    severity: fail
+    statement: The flow works with JavaScript disabled except for recommendation and telemetry.
+  - id: reliabilityrepeatability-2
+    type: oracle
+    severity: fail
+    statement: UserCom failure never blocks navigation or downloads.
+  - id: performance-1
+    type: performance
+    severity: fail
+    statement: First meaningful content <= 2 seconds.
+  - id: performance-2
+    type: performance
+    severity: fail
+    statement: Download navigation begins <= 500 milliseconds after selection.
+  - id: required-state-1
+    type: oracle
+    severity: fail
+    statement: The v0.7.1 or newer signed CARS release is live.
+    tags:
+      - migrated-preflight
+  - id: required-state-2
+    type: oracle
+    severity: fail
+    statement: The public manifest and release version agree.
+    tags:
+      - migrated-preflight
+  - id: required-state-3
+    type: oracle
+    severity: fail
+    statement: No wallet or payment is required for this flow.
+    tags:
+      - migrated-preflight
+policy:
+  unsafeContent: stop
+  highImpactActions: deny
+  allowedHosts:
+    - userwallet.getmetanet.com
+  spendLimit: 0
+  warnExitCode: 0
+remediation:
+  mode: manual
+  allowed: true
+  proposalOnly: true
+  requiredApprovers: 1
+uses: []
