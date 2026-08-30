@@ -1,0 +1,36 @@
+name: ProofRun product journeys
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 5 * * 4'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: proofrun-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  journeys:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify ProofRun API ingress
+        run: curl --fail --show-error --location --retry 3 --retry-all-errors --connect-timeout 10 --max-time 30 https://app.proofrun.metanet.app/healthz
+      - uses: p2ppsr/proofrun-github@5b8f25cf190bb2f258e09b1e1a2e924a14f6641f
+        with:
+          mode: hosted
+          workflow: docs/proofrun/workflows/peacock-wallet-marketing-download.v1.proofrun.yaml
+          profiles: proofrun/catalog/profiles/impatient-newcomer.yaml
+          devices: |
+            proofrun/catalog/devices/chromium-desktop.yaml
+            proofrun/catalog/devices/webkit-mobile.yaml
+          platform-url: https://app.proofrun.metanet.app
+          token: ${{ secrets.PROOFRUN_TOKEN }}
+          warn-behavior: success
+          timeout-seconds: '6900'
