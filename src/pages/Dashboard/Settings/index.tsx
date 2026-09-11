@@ -23,8 +23,8 @@ import ComputerIcon from '@mui/icons-material/Computer'
 import { UserContext } from '../../../UserContext'
 import PageLoading from '../../../components/PageLoading'
 import { toast } from 'react-toastify'
-import { useNavigate } from 'react-router-dom'
 import { reconcileStoredKeyMaterial } from '../../../utils/keyMaterial'
+import AdditionalSettings from './Advanced'
 import {
   DIAGNOSTICS_PREFERENCE_EVENT,
   getDiagnosticsEnabled,
@@ -35,7 +35,6 @@ const Settings: React.FC = () => {
   const { settings, updateSettings } = useContext(WalletContext)
   const { pageLoaded, appVersion } = useContext(UserContext)
   const theme = useTheme()
-  const navigate = useNavigate()
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [diagnosticsEnabled, setDiagnosticsPreference] = useState(getDiagnosticsEnabled)
   const isDarkMode = theme.palette.mode === 'dark'
@@ -192,7 +191,7 @@ const Settings: React.FC = () => {
         Settings
       </Typography>
       <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-        Control Peacock's appearance, privacy, recovery material, and advanced behavior.
+        Control Peacock's appearance, privacy, currency, network, recovery material, and session.
       </Typography>
 
       {settingsLoading && (
@@ -274,6 +273,8 @@ const Settings: React.FC = () => {
         </Grid2>
       </Paper>
 
+      <AdditionalSettings />
+
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4, mt: 4 }}>
         <Typography variant="h4" sx={{ mb: 2 }}>
           Private Key Management
@@ -322,22 +323,6 @@ const Settings: React.FC = () => {
             No keys available yet. Unlock your wallet through the greeter to save your phrase or hex key locally.
           </Typography>
         )}
-      </Paper>
-
-      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4 }}>
-        <Typography variant="h4" sx={{ mb: 1 }}>
-          Advanced
-        </Typography>
-        <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-          Manage currency, wallet sessions, storage, and developer-oriented controls.
-        </Typography>
-        <Button
-          variant="outlined"
-          disabled={settingsLoading}
-          onClick={() => navigate('/dashboard/settings/advanced')}
-        >
-          Open advanced settings
-        </Button>
       </Paper>
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mb: 4 }}>

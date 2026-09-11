@@ -17,9 +17,7 @@ import Grid2 from '@mui/material/Grid2'
 import { WalletContext } from '../../../WalletContext'
 import { toast } from 'react-toastify'
 import { useNavigate } from 'react-router-dom'
-import PageHeader from '../../../components/PageHeader'
 import NetworkEnvironmentSelector from '../../../components/NetworkEnvironmentSelector'
-import { DEFAULT_APP_ICON } from '../../../constants/popularApps'
 import {
   SUPPORTED_FIAT_CURRENCIES,
   getCurrencyDisplayName,
@@ -89,31 +87,14 @@ const AdvancedSettings: React.FC = () => {
   const formatBytes = (bytes?: number) =>
     bytes == null ? 'Not measured' : `${(bytes / (1024 * 1024)).toFixed(1)} MiB (device total)`
   return (
-    <Box
-      sx={{
-        width: '100%',
-        px: { xs: 2, md: 3 },
-        py: 3
-      }}
-    >
-      <PageHeader
-        title='Advanced Settings'
-        subheading='Session settings and display preferences.'
-        icon={DEFAULT_APP_ICON}
-        buttonTitle=''
-        onClick={() => void 0}
-        showButton={false}
-        showBackButton
-        onBackClick={() => navigate('/dashboard/settings')}
-      />
-
+    <>
       {settingsLoading && (
-        <Box sx={{ width: '100%', mt: 2, mb: 2 }}>
+        <Box sx={{ width: '100%', mt: 4, mb: 2 }}>
           <LinearProgress />
         </Box>
       )}
 
-      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 3 }}>
+      <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 4 }}>
         <NetworkEnvironmentSelector disabled={settingsLoading} />
       </Paper>
 
@@ -342,7 +323,7 @@ const AdvancedSettings: React.FC = () => {
           Log out
         </Button>
       </Paper>
-    </Box>
+    </>
   )
 }
 

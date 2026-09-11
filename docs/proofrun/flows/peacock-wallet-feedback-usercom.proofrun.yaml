@@ -1,0 +1,119 @@
+proofrunVersion: 1
+id: peacock-wallet-feedback-usercom
+name: Peacock Wallet in-wallet feedback and UserCom observability
+surface:
+  repo: p2ppsr/peacock-wallet
+  workspace: /Users/tyeverett/projects/user-wallet
+  dossier: /Users/tyeverett/projects/network-ops/docs/repos/p2ppsr/peacock-wallet.md
+  category: feedback
+  audience: "A Peacock Wallet user reporting a problem or suggesting an improvement."
+environment:
+  kind: production
+  baseUrl: https://userwallet.getmetanet.com
+  healthEndpoints:
+    - https://userwallet.getmetanet.com/manifest.json
+    - https://usercom.babbage.systems/healthz
+  deployment:
+    system: github-actions-signed-tauri-release
+    workflow: release
+    namespace: ""
+    workload: ""
+    releaseSource: p2ppsr/peacock-wallet
+safety:
+  stateChanging: true
+  spendCap:
+    amount: 0
+    unit: sats
+  testIdentities: []
+  cleanup:
+    required: false
+    instructions: "Label the note as a Commercial Readiness verification so the UserCom item can be archived."
+matrix:
+  desktopBrowsers: []
+  mobileBrowsers: []
+  mobileSimulators: []
+  desktopWallets:
+    - peacock-wallet
+  mobileWallets: []
+  serverWallets:
+    - usercom
+  networks:
+    - mainnet
+preflight:
+  commands:
+    - description: Check exact source state
+      command: git status --short --branch && git rev-parse HEAD
+      cwd: /Users/tyeverett/projects/user-wallet
+    - description: Check UserCom health
+      command: curl -fsS https://usercom.babbage.systems/healthz
+      cwd: /Users/tyeverett/projects/user-wallet
+  requiredState:
+    - "The signed release under test includes the Leave feedback navigation item."
+    - "Anonymous diagnostics are enabled for the test profile so feedback lifecycle signals are observable."
+    - "No personal email or wallet material is used for this run."
+flow:
+  steps:
+    - id: open-feedback
+      actor: target-user
+      action: "Open Leave feedback from the persistent wallet navigation."
+      expected:
+        ui:
+          - "The form warns against passwords, recovery phrases, keys, identity material, transactions, and private messages."
+          - "Email is visibly optional and the data disclosure names UserCom and the app version."
+        telemetry:
+          - "feedback.opened is emitted with surface=wallet-feedback."
+      timing:
+        thresholdMs: 1000
+    - id: submit-feedback
+      actor: target-user
+      action: "Submit a clearly labeled Commercial Readiness verification note without an email address."
+      expected:
+        ui:
+          - "The submit control shows progress and then a clear success confirmation."
+        domain:
+          - "UserCom stores one feedback item under source=user-wallet and surface=wallet-feedback."
+        telemetry:
+          - "feedback.submit_started and feedback.client_acknowledged are queryable without the message text."
+      timing:
+        thresholdMs: 8000
+assertions:
+  uiAppearance:
+    - "The feedback page is usable at desktop and compact wallet widths without clipped or overlapping controls."
+  audienceIntuition:
+    - "A user can find Leave feedback without entering Settings and understands that email is optional."
+  customerTrust:
+    - "The form clearly warns against secrets and states exactly what is submitted."
+  flowSuccess:
+    - "The UI acknowledgment and stored UserCom feedback item agree."
+  telemetryObservability:
+    - "Lifecycle signals contain lengths, contact presence, source/surface, release, and failure classification only; they never contain feedback text or email."
+  reliabilityRepeatability:
+    - "A failed request preserves the user's text and a later retry can succeed."
+  performance:
+    - "Submission reaches a terminal UI state within the eight-second client timeout."
+evidence:
+  publicSafe:
+    - "Sanitized run record with event names, response status, and redacted screenshots."
+  privateArtifacts:
+    - "network-ops/artifacts/proofrun/p2ppsr/peacock-wallet/<timestamp>-peacock-wallet-feedback-usercom/"
+telemetry:
+  expectedEvents:
+    - name: feedback.opened
+      required: true
+    - name: feedback.submit_started
+      required: true
+    - name: feedback.client_acknowledged
+      required: true
+  queryInstructions: "Use protected UserCom access for source=user-wallet, surface=wallet-feedback, and the run time window; do not copy unrelated feedback or contact data."
+performanceThresholds:
+  firstMeaningfulContentMs: 2000
+  uiFeedbackAfterActionMs: 500
+  walletPromptShownMs: 0
+  approvalToConfirmationMs: 0
+  fullFlowMs: 15000
+  telemetryVisibleMs: 60000
+recording:
+  runRecordTemplate: /Users/tyeverett/projects/network-ops/docs/runbooks/proofrun-run-record-template.md
+  productRunPath: docs/proofrun/runs/<YYYYMMDDTHHMMSSZ>-peacock-wallet-feedback-usercom.md
+  updateDossier: true
+  updateReadinessRegistry: true

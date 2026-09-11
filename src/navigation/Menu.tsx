@@ -3,6 +3,7 @@ import {
   BadgeRounded,
   HomeRounded,
   PaymentsRounded,
+  FeedbackRounded,
   SettingsRounded,
   VerifiedUserRounded
 } from '@mui/icons-material'
@@ -38,6 +39,7 @@ const navItems = [
   { label: 'Payments', path: '/dashboard/payments', icon: PaymentsRounded, testId: 'wallet-nav-payments', matches: ['/dashboard/payments', '/dashboard/transfer'] },
   { label: 'Identity', path: '/dashboard/identity', icon: BadgeRounded, testId: 'wallet-nav-identity', matches: ['/dashboard/identity', '/dashboard/certificate/'] },
   { label: 'Trusted entities', path: '/dashboard/trust', icon: VerifiedUserRounded, testId: 'wallet-nav-trust', matches: ['/dashboard/trust', '/dashboard/counterparty/'] },
+  { label: 'Leave feedback', path: '/dashboard/feedback', icon: FeedbackRounded, testId: 'wallet-nav-feedback', matches: ['/dashboard/feedback'] },
   { label: 'Settings', path: '/dashboard/settings', icon: SettingsRounded, testId: 'wallet-nav-settings', matches: ['/dashboard/settings'] }
 ]
 
