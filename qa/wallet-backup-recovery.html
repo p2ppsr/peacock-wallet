@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Wallet backup recovery QA</title>
+  </head>
+  <body>
+    <h1>Synthetic wallet backup recovery</h1>
+    <p>
+      Uses disposable IndexedDB databases and identities. Token publication is stubbed; no wallet is
+      funded and nothing is broadcast.
+    </p>
+    <button id="run">Run recovery checks</button>
+    <button id="portability">Run portability checks</button>
+    <pre id="results" role="status"></pre>
+    <script type="module">
+      import { runWalletPortabilityQA } from '/scripts/qa/wallet-portability.mjs';
+      import { runWalletBackupRecoveryQA } from '/scripts/qa/wallet-backup-recovery.mjs';
+      document.querySelector('#portability').onclick = async () => {
+        const buttons = [...document.querySelectorAll('button')];
+        buttons.forEach((b) => (b.disabled = true));
+        results.textContent = '';
+        try {
+          const result = await runWalletPortabilityQA(
+            (message) => (results.textContent += message + '\n')
+          );
+          results.textContent += `COMPLETE: ${result.passed.length} portability checks passed\n`;
+        } catch (error) {
+          results.textContent += 'FAILED: ' + error.message + '\n';
+        } finally {
+          buttons.forEach((b) => (b.disabled = false));
+        }
+      };
+      const button = document.querySelector('#run'),
+        results = document.querySelector('#results');
+      button.onclick = async () => {
+        button.disabled = true;
+        results.textContent = '';
+        try {
+          const result = await runWalletBackupRecoveryQA((message) => {
+            results.textContent += message + '\n';
+          });
+          results.textContent += 'COMPLETE: ' + result.passed.length + ' checks passed\n';
+        } catch (error) {
+          results.textContent += 'FAILED: ' + error.message + '\n';
+        } finally {
+          button.disabled = false;
+        }
+      };
+    </script>
+  </body>
+</html>

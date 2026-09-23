@@ -68,6 +68,7 @@ struct TrayHolder {
     _icon: tauri::tray::TrayIcon,
 }
 
+mod wallet_archive;
 mod binary_bridge;
 mod origin;
 mod priority;
@@ -1309,6 +1310,7 @@ fn main() {
         relinquish_focus,
         download,
         save_file,
+        wallet_archive::save_wallet_archive,
         proxy_fetch_manifest,
         take_pending_crash_report,
         binary_bridge::register_binary_handler,

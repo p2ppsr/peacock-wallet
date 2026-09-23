@@ -105,7 +105,13 @@ describe('resolveWalletEnvironment', () => {
     session.setItem('appinfo', 'ttn-app-request')
     session.setItem('lastAppDomain', 'example.com')
 
+    storage.setItem('peacock.wallet-storage-config.v1.wallet', 'both-network-configs')
+    storage.setItem('peacock.wallet-archive-activation.v1.ttn.wallet', 'recovery-journal')
+    storage.setItem('peacock.device-backup-preferences.v1.ttn', 'ttn-preferences')
     prepareWalletEnvironmentSwitch('mainnet', storage, session)
+    expect(storage.getItem('peacock.wallet-storage-config.v1.wallet')).toBe('both-network-configs')
+    expect(storage.getItem('peacock.wallet-archive-activation.v1.ttn.wallet')).toBe('recovery-journal')
+    expect(storage.getItem('peacock.device-backup-preferences.v1.ttn')).toBe('ttn-preferences')
 
     expect(storage.getItem(WALLET_ENVIRONMENT_STORAGE_KEY)).toBe('mainnet')
     expect(storage.getItem(walletEnvironmentStorageKey('snap', 'mainnet'))).toBe('mainnet-snapshot')

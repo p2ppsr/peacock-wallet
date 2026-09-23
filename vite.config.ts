@@ -12,6 +12,7 @@ export default defineConfig(async () => ({
     }),
   ],
 
+  worker: { format: 'es' },
   build: {
     rollupOptions: {
       output: {

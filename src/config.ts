@@ -74,7 +74,9 @@ function browserSessionStorage(): WalletEnvironmentSessionStorage | undefined {
 }
 
 function shouldPreserveAcrossEnvironmentSwitch(key: string): boolean {
-  return /^peacock:(mainnet|teratestnet):wallet:v1:/.test(key) ||
+  return key.startsWith('peacock.wallet-') ||
+    key.startsWith('peacock.device-backup-preferences.v1.') ||
+    /^peacock:(mainnet|teratestnet):wallet:v1:/.test(key) ||
     LEGACY_MAINNET_UNLOCK_KEYS.has(key) ||
     NETWORK_INDEPENDENT_STORAGE_KEYS.has(key)
 }
