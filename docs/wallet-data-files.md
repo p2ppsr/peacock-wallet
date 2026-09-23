@@ -21,3 +21,7 @@ Release qualification also requires native file-picker/save flows, interruption/
 ## Coordinated Toolbox upgrade
 
 The wallet consumes published Toolbox 2.14.0 and Message Box Client 2.5.3. [TS Stack #579](https://github.com/bsv-blockchain/ts-stack/pull/579) supplies basket membership/recovery corrections, send-max authorization, optional monitor subscription recovery and additive client/mobile exports. The lockfile pins the verified npm artifacts; file-format and signing-key boundaries remain unchanged.
+
+## SDK 2.8.2 integration
+
+The wallet now pins published SDK 2.8.2, retaining the authenticated AES-GCM fix from 2.8.1 and adding [TS Stack #581](https://github.com/bsv-blockchain/ts-stack/pull/581). Successful automatic React Native/XDM discovery no longer leaves subsequent wallet calls subject to the short probe deadline. Discovery remains bounded, explicit operation timeouts and response/origin validation are unchanged. Web applications must also update their own SDK bundle; upgrading a wallet alone cannot repair an older application bundle.
