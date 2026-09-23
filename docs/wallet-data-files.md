@@ -17,3 +17,7 @@ The format includes saved transaction records, proofs, baskets, outputs, labels,
 Run `npm ci`, `npm run lint`, `npm test`, `npm run test:security`, `npm run build`, and `npm run chaintracks:release-gate`. Native archive tests run with `cargo test --locked` in `src-tauri`. Browser worker tests are exposed through the development-only QA page and use disposable unfunded fixtures. Production builds do not include that page.
 
 Release qualification also requires native file-picker/save flows, interruption/restart, cross-wallet semantic comparisons and application-level wallet requests. Unit and browser tests alone do not establish native-platform or production-service acceptance.
+
+## Coordinated Toolbox upgrade
+
+The wallet consumes published Toolbox 2.14.0 and Message Box Client 2.5.3. [TS Stack #579](https://github.com/bsv-blockchain/ts-stack/pull/579) supplies basket membership/recovery corrections, send-max authorization, optional monitor subscription recovery and additive client/mobile exports. The lockfile pins the verified npm artifacts; file-format and signing-key boundaries remain unchanged.
