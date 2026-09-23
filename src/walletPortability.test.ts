@@ -59,6 +59,7 @@ describe('standard wallet archives', () => {
     expect(await decodeArchive(new Uint8Array(toolbox), password.normalize('NFC'))).toEqual(
       document
     );
+    await expect(decodeArchive(encoded, '')).rejects.toMatchObject({ code: 'password' });
     await expect(decodeArchive(encoded, 'wrong password')).rejects.toMatchObject({
       code: 'password',
     });

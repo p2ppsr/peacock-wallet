@@ -1015,12 +1015,18 @@ fn main() {
                             format!("Peacock Wallet could not start its local wallet bridge: {error}"),
                         )
                     };
+                    // setup runs on the UI thread. A blocking dialog here waits
+                    // for that same thread and leaves the wallet unresponsive.
+                    let handle = app.handle().clone();
+                    if let Some(window) = app.get_webview_window(MAIN_WINDOW_NAME) {
+                        let _ = window.hide();
+                    }
                     app.dialog()
                         .message(message)
                         .title(title)
                         .kind(MessageDialogKind::Error)
-                        .blocking_show();
-                    std::process::exit(0);
+                        .show(move |_| handle.exit(0));
+                    return Ok(());
                 }
             };
             let WalletBridgeListeners {

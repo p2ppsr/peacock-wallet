@@ -9,9 +9,16 @@ export async function runPortabilityWorker<T>(
 ): Promise<T> {
   if (signal?.aborted) throw new PortabilityError('cancelled');
   return await new Promise<T>((resolve, reject) => {
-    const worker = new Worker(new URL('./walletPortability.worker.ts', import.meta.url), {
-      type: 'module',
-    });
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('./walletPortability.worker.ts', import.meta.url), {
+        type: 'module',
+      });
+    } catch {
+      if ('password' in request) request.password = '';
+      reject(new PortabilityError('storage'));
+      return;
+    }
     const cleanup = () => {
       worker.terminate();
       signal?.removeEventListener('abort', cancel);
@@ -27,16 +34,21 @@ export async function runPortabilityWorker<T>(
         return;
       }
       cleanup();
-      if (data.type === 'error')
+      if (data.type === 'error') {
         reject(new PortabilityError(data.code as PortabilityErrorCode, data.detail));
-      else resolve(data.result as T);
+      } else resolve(data.result as T);
     };
     worker.onerror = (event) => {
       event.preventDefault();
       cleanup();
       reject(new PortabilityError('storage'));
     };
-    worker.postMessage(request);
+    try {
+      worker.postMessage(request);
+    } catch {
+      cleanup();
+      reject(new PortabilityError('storage'));
+    }
     // The worker owns its structured clone. Do not retain the passphrase here.
     if ('password' in request) request.password = '';
   });

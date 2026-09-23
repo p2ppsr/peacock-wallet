@@ -661,6 +661,7 @@ export async function decodeArchive(bytes: Uint8Array, password: string): Promis
   const encrypted = bytes[0] === 87 && bytes[1] === 68 && bytes[2] === 65 && bytes[3] === 84;
   if (encrypted) {
     const header = readArchiveHeader(bytes);
+    if (password.length === 0) throw new PortabilityError('password');
     const key = await deriveKey(password, header);
     try {
       plaintext = new Uint8Array(
