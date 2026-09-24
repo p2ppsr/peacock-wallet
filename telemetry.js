@@ -4,7 +4,7 @@
   const SIGNAL_ENDPOINT = "https://usercom.babbage.systems/signal";
   const SOURCE = "peacock-wallet";
   const SURFACE = "marketing-site";
-  const RELEASE = "v0.9.1";
+  const RELEASE = "v0.9.2";
   const MAX_CONTEXT_VALUE_LENGTH = 96;
   const ALLOWED_HOSTS = new Set([
     "userwallet.getmetanet.com",
