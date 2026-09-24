@@ -110,3 +110,10 @@ these values now pass result validation without rewriting stored records.
 BRC100 calls, wire bytes, permissions and BRC-38/39 recovery behavior are
 unchanged. New-action input validation and transaction/script/value checks
 remain in force.
+
+### 0.9.2: authenticated payment compatibility
+
+This patch includes published `@bsv/sdk` 2.8.5, which increases HTTP client
+header capacity fourfold and allows valid larger payment proofs within the
+aggregate transport budget. BRC100 calls, wallet records, permissions and
+BRC-38/39 recovery formats remain unchanged. No account migration is needed.

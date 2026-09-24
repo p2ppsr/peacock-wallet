@@ -22,9 +22,9 @@ Release qualification also requires native file-picker/save flows, interruption/
 
 The wallet consumes published Toolbox 2.14.0 and Message Box Client 2.5.3. [TS Stack #579](https://github.com/bsv-blockchain/ts-stack/pull/579) supplies basket membership/recovery corrections, send-max authorization, optional monitor subscription recovery and additive client/mobile exports. The lockfile pins the verified npm artifacts; file-format and signing-key boundaries remain unchanged.
 
-## SDK 2.8.3 integration
+## SDK 2.8.5 integration
 
-The wallet pins published SDK 2.8.3, including the authenticated AES-GCM and bounded discovery fixes from 2.8.1/2.8.2. [TS Stack #587](https://github.com/bsv-blockchain/ts-stack/pull/587) also preserves explicit originators during HTTP discovery, binds browser JSON fetch correctly, and restores signed `listActions` net amounts using the historical wire bytes. Counts, lengths, individual output values, origin binding and response validation remain strict.
+The wallet pins published SDK 2.8.5, including the authenticated AES-GCM and bounded discovery fixes from 2.8.1/2.8.2. [TS Stack #587](https://github.com/bsv-blockchain/ts-stack/pull/587) also preserves explicit originators during HTTP discovery, binds browser JSON fetch correctly, and restores signed `listActions` net amounts using the historical wire bytes. Counts, lengths, individual output values, origin binding and response validation remain strict.
 
 These are SDK compatibility repairs. No BRC100 application API, wire format or account-data migration is required. Existing older clients retain their calls and wire bytes; applications that bundle an affected 2.8.x client can take the SDK patch without rewriting calls. This does not impose an ecosystem-wide SDK upgrade. Wallet provider installation and standard BRC100 responses must remain compatible with older clients.
 
