@@ -100,3 +100,13 @@ Please file bugs with clear repro steps and platform info. For security-related 
 ## License
 
 The license for the code in this repository is the Open BSV License.
+
+
+### 0.9.1: existing wallet history compatibility
+
+This patch includes published `@bsv/sdk` 2.8.4. Existing action histories may
+contain empty descriptions on generated change or empty unassigned baskets;
+these values now pass result validation without rewriting stored records.
+BRC100 calls, wire bytes, permissions and BRC-38/39 recovery behavior are
+unchanged. New-action input validation and transaction/script/value checks
+remain in force.
