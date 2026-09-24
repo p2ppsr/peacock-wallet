@@ -36,7 +36,6 @@ import {
   reconcileStoredKeyMaterial
 } from '../../utils/keyMaterial'
 import {
-  getWalletEnvironmentStorageItem,
   setWalletEnvironmentStorageItem,
 } from '../../config'
 
@@ -49,7 +48,7 @@ type PendingApp = {
 }
 
 const Greeter = () => {
-  const { environment, managers, snapshotLoaded } = useContext(WalletContext)
+  const { environment, managers, walletHydrating, walletStartupError } = useContext(WalletContext)
   const { appName, pageLoaded } = useContext(UserContext)
   const navigate = useNavigate()
   const walletManager = managers?.walletManager
@@ -195,8 +194,7 @@ const Greeter = () => {
     setAppInfo(null)
   }
 
-  const awaitingAutoLogin = typeof window !== 'undefined' && Boolean(getWalletEnvironmentStorageItem('snap')) && !snapshotLoaded
-  if (!pageLoaded || !persistedKeyLoaded || awaitingAutoLogin) return <PageLoading />
+  if (!pageLoaded || !persistedKeyLoaded || walletHydrating) return <PageLoading />
 
   const materialPresent = mode === 'private' ? Boolean(privateKey.trim()) : Boolean(mnemonic.trim())
 
@@ -234,6 +232,11 @@ const Greeter = () => {
               </Typography>
             </Alert>
           )}
+
+          {walletStartupError && <Alert severity="warning">{walletStartupError} Your saved keys and wallet files are still on this device.</Alert>}
+          <Button onClick={() => navigate('/recovery/wallet-data')} fullWidth>
+            Restore wallet data file
+          </Button>
 
           <Box component="form" onSubmit={handleSubmit}>
             <Stack spacing={2}>

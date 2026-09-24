@@ -49,3 +49,6 @@ jobs:
       - name: Check native host
         working-directory: src-tauri
         run: cargo check --locked
+      - name: Test native archive persistence
+        working-directory: src-tauri
+        run: cargo test --locked

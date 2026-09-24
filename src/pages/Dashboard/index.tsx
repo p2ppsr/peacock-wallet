@@ -22,6 +22,8 @@ import MyIdentity from './MyIdentity'; // Assuming index.tsx or similar
 import Trust from './Trust'; // Assuming index.tsx or similar
 import Apps from './Apps';
 import App from './App/Index'; // Assuming index.tsx or similar
+import Backups from './Settings/Backups';
+import DeviceBackupReminder from '../../components/WalletBackups/DeviceBackupReminder';
 import Settings from './Settings'; // Assuming index.tsx or similar
 import { UserContext } from '../../UserContext';
 import Home from './Home';
@@ -42,7 +44,7 @@ import { toast } from 'react-toastify';
  */
 export default function Dashboard() {
   const { pageLoaded } = useContext(UserContext);
-  const { activeProfile, environment } = useContext(WalletContext)
+  const { activeProfile, environment, storageConfig, storageOperation, walletDataIdentity } = useContext(WalletContext)
   const breakpoints = useBreakpoint();
   const theme = useTheme();
   const styles = useMemo(() => style(theme, { breakpoints }), [theme, breakpoints]);
@@ -253,6 +255,7 @@ export default function Dashboard() {
       </div>
       <Menu menuOpen={menuOpen} setMenuOpen={setMenuOpen} menuRef={menuRef} />
       <Box sx={styles.page_container}>
+        <DeviceBackupReminder config={storageConfig} profile={walletDataIdentity ?? profileKey} network={environment.chain} busy={storageOperation.busy} />
         <Routes>
           <Route
             path='counterparty/self'
@@ -263,6 +266,7 @@ export default function Dashboard() {
             element={<Navigate to='/dashboard/counterparty/0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798' replace />}
           />
 
+          <Route path='settings/backups' element={<Backups />} />
           <Route path='settings' element={<Settings />} />
           <Route path='settings/advanced' element={<Navigate to='/dashboard/settings' replace />} />
           <Route path='feedback' element={<Feedback />} />

@@ -13,7 +13,7 @@ describe('network-aware client factories', () => {
     const ttn = getRegistryClient(wallet, { networkPreset: 'teratestnet' })
 
     expect(ttn).not.toBe(mainnet)
-    expect((ttn as any).networkPreset).toBe('teratestnet')
+    expect((ttn as any).resolver.networkPreset).toBe('teratestnet')
   })
 
   it('passes teratestnet to identity and lookup clients', async () => {

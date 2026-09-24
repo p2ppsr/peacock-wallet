@@ -1,3 +1,51 @@
+import { DEVICE_BACKUP_PREFERENCES_KEY, loadDeviceBackupPreferences, saveDeviceBackupPreferences, resolveBackupPreferences, reconcileBackupPreferences, missingPreferredBackups, type DeviceBackupPreferences, type ResolvedBackupPreferences } from './walletStoragePreferences'
+import { invoke } from '@tauri-apps/api/core'
+import { PortabilityError, type ArchiveSource } from './walletPortability'
+import { runPortabilityWorker } from './walletPortabilityClient'
+import { loadArchiveJob, openArchiveStorage, updateArchiveJob, type ArchiveJob } from './walletPortabilityStore'
+import { commitArchiveActivation, recoverArchiveActivation } from './walletPortabilityActivation'
+import { loadProfileWalletStorageConfig, walletProfileStorage } from './walletStorageProfiles'
+import { resolveLocalWalletDatabase } from './walletStorageLocal'
+import { prepareWalletBackupSetup, validateWalletStorageCapabilities } from './walletStorageSetup'
+import { yieldWalletStorageTask } from './walletStorageScheduling'
+import {
+  addBackupTarget,
+  beginWalletStorageOperation,
+  clearPendingWalletStorageOperation,
+  isMatchingPendingWalletStorageOperation,
+  loadWalletStorageConfig,
+  makePrimaryTarget,
+  markWalletStorageSynced,
+  normalizeWalletStorageTarget,
+  persistWalletStorageConfig,
+  removeBackupTarget,
+  recoverPendingWalletStorageOperation,
+  walletStorageTargetId,
+  walletStorageTargetsEqual,
+  type NetworkWalletStorageConfig,
+  type WalletStorageNetwork,
+  type WalletStorageOperationKind,
+  type WalletStorageTarget
+} from './walletStorageConfig'
+import {
+  applyWalletStorageUploadChunkLimits,
+  buildWalletStorageProviderStatuses,
+  encodeWalletStorageSyncProgress,
+  parseWalletStorageSyncProgress,
+  enforceConfiguredPrimary,
+  findStoreForTarget,
+  getBoundedWalletStorageUploadChunk,
+  summarizeWalletStorageSyncChunk,
+  type WalletStorageProviderStatus
+} from './walletStorageRuntime'
+import { WalletBackupStorageClient, WalletStorageProviderError, walletStorageFailureDetails, walletStorageTransferMessage, type WalletStorageFailure } from './walletStorageRpc'
+import { WalletStorageConnections, WalletBackupStorageManager } from './walletStorageConnections'
+import { updateSyncDisplayProgress, type StorageSyncDisplayProgress } from './walletStorageProgress'
+import {
+  runWalletStorageBenchmark,
+  type WalletStorageBenchmarkResult
+} from './walletStorageBenchmark'
+
 import React, { useState, useEffect, createContext, useMemo, useCallback, useContext, useRef } from 'react'
 import {
   Button,
@@ -13,9 +61,9 @@ import {
   PrivilegedKeyManager,
   WalletStorageManager,
   SimpleWalletManager,
-  WalletSigner,
   Services,
-  StorageClient,
+  StorageIdb,
+  sdk,
   PermissionRequest,
   WalletLogger,
   DEFAULT_SETTINGS,
@@ -35,10 +83,10 @@ import { toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import {
   ACTIVE_WALLET_ENVIRONMENT,
+  DEFAULT_STORAGE_URL,
   ADMIN_ORIGINATOR,
   WALLET_ENVIRONMENT_STORAGE_KEY,
   getWalletEnvironmentStorageItem,
-  removeWalletEnvironmentStorageItem,
   walletEnvironmentStoragePrefix,
   type WalletEnvironment,
 } from './config'
@@ -121,6 +169,23 @@ interface ManagerState {
   walletManager?: SimpleWalletManager;
   permissionsManager?: WalletPermissionsManager;
   settingsManager?: WalletSettingsManager;
+  wallet?: WalletInterface;
+  storageManager?: WalletStorageManager;
+  storageConnections?: WalletStorageConnections;
+}
+
+export interface WalletStorageOperationState {
+  busy: boolean
+  automatic?: boolean
+  providerFailure?: WalletStorageFailure
+  kind?: WalletStorageOperationKind | 'sync-backups' | 'remove-backup' | 'local-benchmark' | 'cancel-setup' | 'portable-data'
+  error?: string
+  cancelled?: boolean
+  cancelRequested?: boolean
+  startedAt?: number
+  completedAt?: number
+  progress: Array<{ message: string; at: number }>
+  syncProgress?: StorageSyncDisplayProgress
 }
 
 export interface WalletContextValue {
@@ -132,15 +197,36 @@ export interface WalletContextValue {
   updateSettings: (newSettings: WalletSettings) => Promise<void>;
   network: WalletEnvironment['networkPreset'];
   environment: WalletEnvironment;
+  storageConfig: NetworkWalletStorageConfig
+  storageProviders: WalletStorageProviderStatus[]
+  storageOperation: WalletStorageOperationState
+  storageBenchmark?: WalletStorageBenchmarkResult
+  addBackupStorage: (target: WalletStorageTarget, progress?: (message: string) => void) => Promise<void>
+  removeBackupStorage: (target: WalletStorageTarget, progress?: (message: string) => void) => Promise<void>
+  syncBackupStorage: (progress?: (message: string) => void, options?: { automatic?: boolean }) => Promise<void>
+  setPrimaryStorage: (target: WalletStorageTarget, progress?: (message: string) => void) => Promise<void>
+  runLocalStorageBenchmark: (progress?: (message: string) => void, options?: { sourceUrl?: string; maxPages?: number }) => Promise<WalletStorageBenchmarkResult>
+  cancelBackupSetup: () => Promise<void>
+  cancelStorageOperation: () => void
+  deviceBackupPreferences: DeviceBackupPreferences
+  backupPreferences: ResolvedBackupPreferences
+  saveBackupPreferences: (mode: 'device' | 'profile', preferences: DeviceBackupPreferences) => Promise<void>
+  setUpPreferredBackup: () => Promise<void>
+  walletDataIdentity?: string
+  getArchiveSource: (synchronize: boolean, progress?: (message: string) => void) => Promise<ArchiveSource>
+  mergeWalletArchive: (id: string, progress: (message: string) => void, signal?: AbortSignal) => Promise<ArchiveJob>
+  activateWalletArchive: (id: string, progress: (message: string) => void, signal?: AbortSignal) => Promise<void>
   // Active Profile
   activeProfile: WalletProfile | null;
   setActiveProfile: (profile: WalletProfile | null) => void;
   // Logout
-  logout: () => void;
+  logout: () => Promise<void>;
   adminOriginator: string;
   setPasswordRetriever: (retriever: (reason: string, test: (passwordCandidate: string) => boolean) => Promise<string>) => void
   setRecoveryKeySaver: (saver: (key: number[]) => Promise<true>) => void
   snapshotLoaded: boolean
+  walletHydrating: boolean
+  walletStartupError?: string
   basketRequests: BasketAccessRequest[]
   certificateRequests: CertificateAccessRequest[]
   protocolRequests: ProtocolAccessRequest[]
@@ -161,6 +247,29 @@ export interface WalletContextValue {
   }
 }
 
+export class WalletStorageOperationCancelledError extends Error {
+  constructor () {
+    super('Wallet storage operation cancelled')
+    this.name = 'WalletStorageOperationCancelledError'
+  }
+}
+
+const defaultStorageConfig = (): NetworkWalletStorageConfig => ({
+  revision: 0,
+  primary: { kind: 'remote', url: DEFAULT_STORAGE_URL },
+  backups: [],
+  localStorageIdentityKey: '',
+  lastSuccessfulSyncAt: {},
+  updatedAt: ''
+})
+
+const createLocalStorageIdentityKey = (): string => PrivateKey.fromRandom().toHex()
+
+const createStorageOperationId = (): string => {
+  if (typeof globalThis.crypto?.randomUUID === 'function') return globalThis.crypto.randomUUID()
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 export const WalletContext = createContext<WalletContextValue>({
   managers: {},
   updateManagers: () => { },
@@ -168,13 +277,32 @@ export const WalletContext = createContext<WalletContextValue>({
   updateSettings: async () => { },
   network: ACTIVE_WALLET_ENVIRONMENT.networkPreset,
   environment: ACTIVE_WALLET_ENVIRONMENT,
+  storageConfig: defaultStorageConfig(),
+  storageProviders: [],
+  storageOperation: { busy: false, progress: [] },
+  storageBenchmark: undefined,
+  addBackupStorage: async () => { },
+  removeBackupStorage: async () => { },
+  syncBackupStorage: async () => { },
+  setPrimaryStorage: async () => { },
+  runLocalStorageBenchmark: async () => { throw new Error('Wallet storage is not ready') },
+  cancelBackupSetup: async () => { },
+  cancelStorageOperation: () => { },
+  deviceBackupPreferences: { backups: [{ kind: 'local' }], automatic: true },
+  backupPreferences: { mode: 'device', backups: [{ kind: 'local' }], automatic: true },
+  saveBackupPreferences: async () => {},
+  setUpPreferredBackup: async () => {},
+  getArchiveSource: async () => { throw new PortabilityError('storage') },
+  mergeWalletArchive: async () => { throw new PortabilityError('storage') },
+  activateWalletArchive: async () => { throw new PortabilityError('storage') },
   activeProfile: null,
   setActiveProfile: () => { },
-  logout: () => { },
+  logout: async () => { },
   adminOriginator: ADMIN_ORIGINATOR,
   setPasswordRetriever: () => { },
   setRecoveryKeySaver: () => { },
   snapshotLoaded: false,
+  walletHydrating: true,
   basketRequests: [],
   certificateRequests: [],
   protocolRequests: [],
@@ -567,7 +695,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   const [passwordRetriever, setPasswordRetriever] = useState<
     (reason: string, test: (passwordCandidate: string) => boolean) => Promise<string>
   >(
-    async (_reason, test) => {
+    () => async (_reason: string, test: (passwordCandidate: string) => boolean) => {
       const candidate = '';
       const safeTest = typeof test === 'function' ? test : () => false
       if (safeTest(candidate)) {
@@ -953,7 +1081,62 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   const selectedNetwork = ACTIVE_WALLET_ENVIRONMENT.chain
   const selectedStorageUrl = ACTIVE_WALLET_ENVIRONMENT.storageUrl
   const [snapshotLoaded, setSnapshotLoaded] = useState<boolean>(false);
+  const [walletHydrating, setWalletHydrating] = useState(true)
+  const [walletStartupError, setWalletStartupError] = useState<string>()
+  const storageNetwork = selectedNetwork
+  const [storageConfig, setStorageConfig] = useState<NetworkWalletStorageConfig>(() =>
+    loadWalletStorageConfig(localStorage, storageNetwork, DEFAULT_STORAGE_URL, createLocalStorageIdentityKey)
+  )
+  const deviceBackupPreferences = useMemo(() => loadDeviceBackupPreferences(localStorage, storageNetwork), [storageNetwork])
+  const backupPreferences = useMemo(() => resolveBackupPreferences(storageConfig, deviceBackupPreferences), [storageConfig, deviceBackupPreferences])
+  const [storageProviders, setStorageProviders] = useState<WalletStorageProviderStatus[]>([])
+  const [storageOperation, setStorageOperation] = useState<WalletStorageOperationState>({ busy: false, progress: [] })
+  const [storageBenchmark, setStorageBenchmark] = useState<WalletStorageBenchmarkResult>()
+  const storageScopeRef = useRef<{ identityKey: string; network: WalletStorageNetwork }>()
+  const storageProfileChangingRef = useRef(false)
+  const storageOperationDoneRef = useRef<Promise<void>>(Promise.resolve())
+  const storageOperationRef = useRef(false)
+  const storageOperationCancelRequestedRef = useRef(false)
+  const storageProviderErrorsRef = useRef(new Map<string, string>())
+  const storageSyncProgressReporterRef = useRef<((message: string) => void) | undefined>(undefined)
   const storageConnectionWarmerRef = useRef<ReturnType<typeof createStorageConnectionWarmer> | undefined>(undefined)
+
+  const throwIfStorageOperationCancelled = useCallback(() => {
+    if (storageOperationCancelRequestedRef.current) {
+      throw new WalletStorageOperationCancelledError()
+    }
+  }, [])
+
+  const cancelStorageOperation = useCallback(() => {
+    if (!storageOperationRef.current || storageOperationCancelRequestedRef.current) return
+    storageOperationCancelRequestedRef.current = true
+    storageSyncProgressReporterRef.current?.(
+      'Cancellation requested; finishing the current page before stopping safely...'
+    )
+    setStorageOperation(previous => ({ ...previous, cancelRequested: true }))
+  }, [])
+
+  const saveStorageConfig = useCallback((next: NetworkWalletStorageConfig): NetworkWalletStorageConfig => {
+    const scope = storageScopeRef.current
+    const persisted = persistWalletStorageConfig(
+      scope ? walletProfileStorage(localStorage, scope.identityKey) : localStorage,
+      scope?.network ?? storageNetwork, next
+    )
+    setStorageConfig(persisted)
+    return persisted
+  }, [storageNetwork])
+
+  useEffect(() => {
+    const next = loadWalletStorageConfig(
+      localStorage,
+      storageNetwork,
+      selectedStorageUrl || DEFAULT_STORAGE_URL,
+      createLocalStorageIdentityKey
+    )
+    setStorageConfig(next)
+    storageProviderErrorsRef.current = new Map()
+    setStorageProviders([])
+  }, [storageNetwork])
 
   const warmStorageConnection = useCallback((reason: StorageConnectionWarmupReason) => {
     void storageConnectionWarmerRef.current?.warm(reason)
@@ -978,19 +1161,238 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     }
   }, [warmStorageConnection])
 
+  const refreshStorageProviders = useCallback((
+    storageManager: WalletStorageManager,
+    config: NetworkWalletStorageConfig,
+    errors = storageProviderErrorsRef.current
+  ) => {
+    setStorageProviders(buildWalletStorageProviderStatuses(
+      config,
+      storageManager.getStores(),
+      errors
+    ))
+  }, [])
+
+  const createWalletStorageProvider = useCallback(async (
+    wallet: WalletInterface,
+    target: WalletStorageTarget,
+    chain: WalletStorageNetwork,
+    localStorageIdentityKey: string,
+    telemetry: ReturnType<typeof createWalletTelemetryConfig>,
+    existingLocal = false
+  ) => {
+    if (target.kind === 'local') {
+      storageSyncProgressReporterRef.current?.('Checking this profile’s device backup location...')
+      const { publicKey } = await wallet.getPublicKey({ identityKey: true })
+      storageSyncProgressReporterRef.current?.('Opening the saved device backup location...')
+      const binding = await resolveLocalWalletDatabase(localStorage, chain, publicKey, localStorageIdentityKey, existingLocal)
+      const provider = new StorageIdb({
+        chain,
+        commissionSatoshis: 0,
+        commissionPubKeyHex: undefined,
+        feeModel: { model: 'sat/kb', value: 1 }
+      })
+      provider.dbName = binding.name
+      const syncTotalsByPhase = new Map<string, number>()
+      const getSyncChunk = provider.getSyncChunk.bind(provider)
+      provider.getSyncChunk = async args => {
+        throwIfStorageOperationCancelled()
+        const phase = `${args.fromStorageIdentityKey}:${args.toStorageIdentityKey}:${String(args.since ?? '')}`
+        const knownTotalRecords = syncTotalsByPhase.get(phase)
+        ;(args as sdk.RequestSyncChunkArgs & { includeTotals?: boolean }).includeTotals = knownTotalRecords == null
+        const chunk = await getBoundedWalletStorageUploadChunk<
+          sdk.RequestSyncChunkArgs,
+          sdk.SyncChunk
+        >(
+          applyWalletStorageUploadChunkLimits(args),
+          getSyncChunk,
+          true
+        )
+        throwIfStorageOperationCancelled()
+        const chunkProgress = summarizeWalletStorageSyncChunk(args, chunk, knownTotalRecords)
+        if (chunkProgress.totalRecords != null) syncTotalsByPhase.set(phase, chunkProgress.totalRecords)
+        storageSyncProgressReporterRef.current?.(
+          encodeWalletStorageSyncProgress(chunkProgress)
+        )
+        return chunk
+      }
+      const processSyncChunk = provider.processSyncChunk.bind(provider)
+      provider.processSyncChunk = async (args, chunk) => {
+        throwIfStorageOperationCancelled()
+        const chunkProgress = summarizeWalletStorageSyncChunk(args, chunk)
+        const recordLabel = `${chunkProgress.records.toLocaleString()} ${chunkProgress.stageName}`
+        storageSyncProgressReporterRef.current?.(`Saving ${recordLabel} to the local backup...`)
+        await yieldWalletStorageTask()
+        throwIfStorageOperationCancelled()
+        const startedAt = Date.now()
+        const result = await processSyncChunk(args, chunk)
+        const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000))
+        storageSyncProgressReporterRef.current?.(
+          `Saved ${recordLabel} to the local backup in ${elapsedSeconds.toLocaleString()}s.`
+        )
+        throwIfStorageOperationCancelled()
+        return result
+      }
+      storageSyncProgressReporterRef.current?.('Preparing the device database...')
+      await provider.migrate(`Peacock ${chain} local storage`, binding.storageIdentityKey)
+      const settings = await provider.makeAvailable()
+      return { provider, storageIdentityKey: settings.storageIdentityKey }
+    }
+
+    const normalizedTarget = normalizeWalletStorageTarget(target)
+    if (normalizedTarget.kind !== 'remote') throw new Error('Expected a remote storage target')
+    const url = normalizedTarget.url
+    let provider = new WalletBackupStorageClient(wallet, url, {
+      binaryRequests: isOfficialStorageEndpoint(url),
+      telemetry
+    })
+    const instrument = (client: WalletBackupStorageClient) => {
+      client.onSyncTransferProgress = progress => {
+        throwIfStorageOperationCancelled()
+        storageSyncProgressReporterRef.current?.(walletStorageTransferMessage(normalizedTarget, progress))
+      }
+      client.checkCancelled = throwIfStorageOperationCancelled
+      client.onRetry = message => storageSyncProgressReporterRef.current?.(message)
+      return client
+    }
+    instrument(provider)
+    let settings = await provider.makeAvailable()
+    validateWalletStorageCapabilities(settings, chain)
+    // New sync providers explicitly advertise the protocol that also supports
+    // binary request bodies. Older third-party providers keep their prior mode.
+    if (!isOfficialStorageEndpoint(url) &&
+      (settings as typeof settings & { syncCheckpointVersion?: number }).syncCheckpointVersion === 1) {
+      provider = instrument(new WalletBackupStorageClient(wallet, url, { binaryRequests: true, telemetry }))
+      settings = await provider.makeAvailable()
+      validateWalletStorageCapabilities(settings, chain)
+    }
+    const syncTotalsByPhase = new Map<string, number>()
+    const getSyncChunk = provider.getBoundedSyncChunk.bind(provider)
+    provider.getSyncChunk = async args => {
+      throwIfStorageOperationCancelled()
+      const phase = `${args.fromStorageIdentityKey}:${args.toStorageIdentityKey}:${String(args.since ?? '')}`
+      const knownTotalRecords = syncTotalsByPhase.get(phase)
+      ;(args as sdk.RequestSyncChunkArgs & { includeTotals?: boolean }).includeTotals = knownTotalRecords == null
+      const chunk = await getSyncChunk(args, (maxRoughSize: number, reason: 'response-too-large' | 'response-timeout') => {
+        storageSyncProgressReporterRef.current?.(
+          reason === 'response-timeout'
+            ? `The provider did not return this page before the authenticated response deadline; retrying with a smaller ${Math.ceil(maxRoughSize / 1024)} KiB page...`
+            : `The provider response was too large; retrying this page at ${Math.ceil(maxRoughSize / 1024)} KiB...`
+        )
+      })
+      throwIfStorageOperationCancelled()
+      const chunkProgress = summarizeWalletStorageSyncChunk(args, chunk, knownTotalRecords)
+      if (chunkProgress.totalRecords != null) syncTotalsByPhase.set(phase, chunkProgress.totalRecords)
+      storageSyncProgressReporterRef.current?.(
+        encodeWalletStorageSyncProgress(chunkProgress)
+      )
+      return chunk
+    }
+    return { provider, storageIdentityKey: settings.storageIdentityKey }
+  }, [throwIfStorageOperationCancelled])
+
+  const runStorageOperation = useCallback(async <T,>(
+    kind: WalletStorageOperationState['kind'],
+    operation: (report: (message: string) => void) => Promise<T>,
+    progress?: (message: string) => void,
+    automatic = false
+  ): Promise<T> => {
+    if (storageProfileChangingRef.current) throw new Error('Wait for the profile switch to finish before changing backups')
+    if (storageOperationRef.current) {
+      throw new Error('Another wallet storage operation is already running')
+    }
+    storageOperationRef.current = true
+    let finishOperation!: () => void
+    storageOperationDoneRef.current = new Promise(resolve => { finishOperation = resolve })
+    storageOperationCancelRequestedRef.current = false
+    const report = (message: string) => {
+      const at = Date.now()
+      const syncProgress = parseWalletStorageSyncProgress(message)
+      setStorageOperation(previous => ({
+        ...previous,
+        syncProgress: syncProgress
+          ? updateSyncDisplayProgress(previous.syncProgress, syncProgress, at, previous.startedAt)
+          : previous.syncProgress,
+        progress: [...previous.progress, { message, at }].slice(-400)
+      }))
+      progress?.(message)
+    }
+    storageSyncProgressReporterRef.current = report
+    setStorageOperation({
+      busy: true,
+      kind,
+      automatic,
+      startedAt: Date.now(),
+      progress: []
+    })
+    try {
+      const result = await operation(report)
+      setStorageOperation(previous => ({
+        ...previous,
+        busy: false,
+        completedAt: Date.now()
+      }))
+      return result
+    } catch (error: any) {
+      const cancelled = error instanceof WalletStorageOperationCancelledError || (error instanceof PortabilityError && error.code === 'cancelled')
+      const message = error?.message || String(error)
+      setStorageOperation(previous => ({
+        ...previous,
+        busy: false,
+        cancelled,
+        cancelRequested: false,
+        completedAt: Date.now(),
+        providerFailure: error instanceof WalletStorageProviderError
+          ? walletStorageFailureDetails(error)
+          : undefined,
+        error: cancelled ? undefined : message
+      }))
+      if (!cancelled) {
+        reportDiagnosticError('wallet.storage.operation_failed', error, {
+          surface: 'wallet-storage',
+          context: { operation: kind }
+        })
+      }
+      throw error
+    } finally {
+      storageSyncProgressReporterRef.current = undefined
+      storageOperationRef.current = false
+      storageOperationCancelRequestedRef.current = false
+      finishOperation()
+    }
+  }, [])
+
   // Build wallet function
   const buildWallet = useCallback(async (
     primaryKey: number[],
     privilegedKeyManager: PrivilegedKeyManager
   ): Promise<any> => {
+    if (storageProfileChangingRef.current) throw new Error('A wallet profile switch is already in progress')
+    storageProfileChangingRef.current = true
+    if (storageOperationRef.current) {
+      storageOperationCancelRequestedRef.current = true
+      setStorageOperation(previous => ({ ...previous, cancelRequested: true }))
+      storageSyncProgressReporterRef.current?.('Switching profiles; finishing the current backup page safely...')
+      await storageOperationDoneRef.current
+    }
     storageConnectionWarmerRef.current?.clear()
     storageConnectionWarmerRef.current = undefined
     try {
       const newManagers = {} as any;
       const chain = selectedNetwork;
       const keyDeriver = new CachedKeyDeriver(new PrivateKey(primaryKey));
-      const storageManager = new WalletStorageManager(keyDeriver.identityKey);
-      const signer = new WalletSigner(chain, keyDeriver as any, storageManager);
+      recoverArchiveActivation(localStorage, chain, keyDeriver.identityKey)
+      const scopedStorage = walletProfileStorage(localStorage, keyDeriver.identityKey)
+      let storageConfig = loadProfileWalletStorageConfig(
+        localStorage, chain, keyDeriver.identityKey, selectedStorageUrl || DEFAULT_STORAGE_URL, createLocalStorageIdentityKey
+      )
+      const saveStorageConfig = (next: NetworkWalletStorageConfig) => persistWalletStorageConfig(scopedStorage, chain, next)
+
+      const preferredConfig = reconcileBackupPreferences(storageConfig, loadDeviceBackupPreferences(localStorage, chain))
+      if (preferredConfig !== storageConfig) storageConfig = saveStorageConfig(preferredConfig)
+      let storageManager = new WalletBackupStorageManager(keyDeriver.identityKey);
+      const telemetry = createWalletTelemetryConfig()
+
       const serviceOptions = Services.createDefaultOptions(chain)
       if (ACTIVE_WALLET_ENVIRONMENT.chaintracksUrl) {
         // Arcade's Go ChainTracks endpoint does not currently allow browser
@@ -1011,25 +1413,123 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       }
       const services = new Services(serviceOptions);
       const makeLogger = () => new WalletLogger()
-      const wallet = new Wallet(signer, services, undefined, privilegedKeyManager, makeLogger);
+      const wallet = new Wallet({
+        chain,
+        keyDeriver,
+        storage: storageManager,
+        services,
+        privilegedKeyManager,
+        makeLogger,
+        telemetry
+      } as any);
+
       newManagers.settingsManager = wallet.settingsManager;
 
-      // Use user-selected storage provider
-      const client = new StorageClient(wallet, selectedStorageUrl, {
-        binaryRequests: isOfficialStorageEndpoint(selectedStorageUrl),
-        telemetry: createWalletTelemetryConfig()
-      });
-      await client.makeAvailable();
-      await storageManager.addWalletStorageProvider(client);
-      storageConnectionWarmerRef.current = createStorageConnectionWarmer(selectedStorageUrl, {
-        report: event => {
-          reportDiagnosticEvent('wallet.storage.connection_warmup', {
-            surface: 'wallet-performance',
-            severity: event.status === 'success' ? 'info' : 'warn',
-            context: event
+      newManagers.wallet = wallet
+      newManagers.storageManager = storageManager
+
+      const providerErrors = new Map<string, string>()
+      storageProviderErrorsRef.current = providerErrors
+      let observedLocalStorageIdentityKey: string | undefined
+
+      // The configured primary is fail-closed: it must be reachable before the
+      // wallet can write. Local-first configurations therefore continue working
+      // offline, while a remote-primary outage cannot silently promote a stale
+      // backup and risk two active writers.
+      try {
+        const primary = await createWalletStorageProvider(
+          wallet,
+          storageConfig.primary,
+          chain,
+          storageConfig.localStorageIdentityKey,
+          telemetry, storageConfig.primary.kind === 'local'
+        )
+        if (storageConfig.primary.kind === 'local') {
+          observedLocalStorageIdentityKey = primary.storageIdentityKey
+        }
+        await storageManager.addWalletStorageProvider(primary.provider)
+        newManagers.storageConnections = new WalletStorageConnections(
+          keyDeriver.identityKey, storageManager, storageConfig.primary, primary.provider,
+          next => {
+            storageManager = next
+            wallet.storage = next
+            newManagers.storageManager = next
+            setManagers(current => current.wallet === wallet ? { ...current, storageManager: next } : current)
+          }
+        )
+      } catch (error: any) {
+        providerErrors.set(walletStorageTargetId(storageConfig.primary), error?.message || String(error))
+        throw new Error(`Primary wallet storage is unavailable: ${error?.message || String(error)}`)
+      }
+
+      // A backup outage must not take a healthy primary offline. Unavailable
+      // backups remain in durable configuration and are shown as degraded until
+      // a later restart/retry can attach them.
+      // Unfinished additions remain detached and resumable until explicitly completed or cancelled.
+      for (const target of storageConfig.backups) {
+        try {
+          const backup = await createWalletStorageProvider(
+            wallet,
+            target,
+            chain,
+            storageConfig.localStorageIdentityKey,
+            telemetry, target.kind === 'local'
+          )
+          if (target.kind === 'local') observedLocalStorageIdentityKey = backup.storageIdentityKey
+          await newManagers.storageConnections.attach(target, backup.provider, storageConfig, undefined, false, storageConfig.pendingOperation?.kind === 'set-primary')
+        } catch (error: any) {
+          const message = error?.message || String(error)
+          providerErrors.set(walletStorageTargetId(target), message)
+          reportDiagnosticError('wallet.storage.backup_unavailable', error, {
+            surface: 'wallet-storage',
+            context: { target: walletStorageTargetId(target) }
           })
         }
-      })
+      }
+
+      // Wallet Toolbox returns its currently persisted active provider first;
+      // that is not necessarily the configured primary. Resolve by target and
+      // require exactly one enabled active provider after reconciliation.
+      const activePrimary = findStoreForTarget(storageManager.getStores(), storageConfig.primary)
+      if (!storageManager.isActiveEnabled || !activePrimary?.isActive || !activePrimary.isEnabled) {
+        throw new Error('Your configured main wallet location is not active. Reconcile the existing wallet locations before making new changes.')
+      }
+
+      let reconciledConfig = storageConfig
+      if (
+        observedLocalStorageIdentityKey &&
+        observedLocalStorageIdentityKey !== storageConfig.localStorageIdentityKey
+      ) {
+        reconciledConfig = saveStorageConfig({
+          ...reconciledConfig,
+          localStorageIdentityKey: observedLocalStorageIdentityKey
+        })
+      }
+      if (reconciledConfig.pendingOperation?.kind === 'set-primary') {
+        const recoveredOperation = reconciledConfig.pendingOperation
+        reconciledConfig = saveStorageConfig(recoverPendingWalletStorageOperation(reconciledConfig))
+        reportDiagnosticEvent('wallet.storage.recovered_pending_operation', {
+          surface: 'wallet-storage',
+          severity: 'warn',
+          context: {
+            operation: recoveredOperation.kind,
+            operationId: recoveredOperation.id
+          }
+        })
+      }
+      refreshStorageProviders(storageManager, reconciledConfig, providerErrors)
+
+      if (reconciledConfig.primary.kind === 'remote') {
+        storageConnectionWarmerRef.current = createStorageConnectionWarmer(reconciledConfig.primary.url, {
+          report: event => {
+            reportDiagnosticEvent('wallet.storage.connection_warmup', {
+              surface: 'wallet-performance',
+              severity: event.status === 'success' ? 'info' : 'warn',
+              context: event
+            })
+          }
+        })
+      }
 
       // Setup permissions with advanced configuration
       const permissionConfig = getPermissionConfigForMode();
@@ -1167,6 +1667,9 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       (window as any).permissionsManager = permissionsManager;
       newManagers.permissionsManager = permissionsManager;
 
+      storageScopeRef.current = { identityKey: keyDeriver.identityKey, network: chain }
+      setStorageConfig(reconciledConfig)
+      setStorageOperation({ busy: false, progress: [] })
       setManagers(m => ({ ...m, ...newManagers }));
 
       return permissionsManager;
@@ -1179,9 +1682,13 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         context: { network: selectedNetwork }
       })
       toast.error("Failed to build wallet: " + error.message);
-      return null;
+      throw error;
+    } finally {
+      storageProfileChangingRef.current = false
     }
   }, [
+    createWalletStorageProvider,
+    refreshStorageProviders,
     selectedNetwork,
     selectedStorageUrl,
     adminOriginator,
@@ -1193,6 +1700,518 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     counterpartyPermissionCallback,
     startPactCooldown
   ]);
+
+
+  const addBackupStorage = useCallback(async (
+    target: WalletStorageTarget,
+    progress?: (message: string) => void
+  ): Promise<void> => runStorageOperation('add-backup', async report => {
+    const normalizedTarget = normalizeWalletStorageTarget(target)
+    if (backupPreferences.mode === 'device' && !deviceBackupPreferences.backups.some(target => walletStorageTargetsEqual(target, normalizedTarget))) throw new Error('Edit device defaults or choose independent profile settings before adding this location')
+    // Validate before writing the recovery marker.
+    addBackupTarget(storageConfig, normalizedTarget)
+    const connections = managers.storageConnections
+    const storageManager = connections?.manager
+    const wallet = managers.wallet
+    if (!storageManager || !wallet || !connections) throw new Error('Wallet storage is not ready')
+
+    const interruptedAdd = isMatchingPendingWalletStorageOperation(
+      storageConfig,
+      'add-backup',
+      normalizedTarget
+    )
+    if (storageConfig.pendingOperation && !interruptedAdd) {
+      throw new Error(
+        `A different wallet storage recovery operation (${storageConfig.pendingOperation.kind}) is pending; restart the wallet before changing storage`
+      )
+    }
+
+    let pendingConfig = storageConfig
+    report(interruptedAdd ? 'Reconnecting to resume the saved backup...' : 'Checking the backup provider before starting setup...')
+    try {
+      const prepared = await prepareWalletBackupSetup(storageConfig, normalizedTarget, async () => {
+        const discovered = await createWalletStorageProvider(
+          wallet, normalizedTarget, selectedNetwork,
+          pendingConfig.localStorageIdentityKey, createWalletTelemetryConfig()
+        )
+        throwIfStorageOperationCancelled()
+        return discovered
+      }, saveStorageConfig, createStorageOperationId)
+      const { attached } = prepared
+      pendingConfig = prepared.pendingConfig
+      throwIfStorageOperationCancelled()
+      report('Checking saved checkpoints and reconciling this backup in an isolated session...')
+      await connections.attach(normalizedTarget, attached.provider, pendingConfig, report, true)
+      throwIfStorageOperationCancelled()
+      let finalConfig = addBackupTarget(pendingConfig, normalizedTarget)
+      if (normalizedTarget.kind === 'local') finalConfig.localStorageIdentityKey = attached.storageIdentityKey
+      finalConfig = markWalletStorageSynced(finalConfig, [normalizedTarget])
+      finalConfig = saveStorageConfig(clearPendingWalletStorageOperation(finalConfig))
+      storageProviderErrorsRef.current.delete(walletStorageTargetId(normalizedTarget))
+      refreshStorageProviders(connections.manager, finalConfig)
+      reportDiagnosticEvent('wallet.storage.backup_added', {
+        surface: 'wallet-storage',
+        context: { target: walletStorageTargetId(normalizedTarget) }
+      })
+      report('Backup attached and synchronized.')
+    } catch (error: any) {
+      if (error instanceof WalletStorageOperationCancelledError) {
+        refreshStorageProviders(connections.manager, pendingConfig)
+        throw error
+      }
+      storageProviderErrorsRef.current.set(
+        walletStorageTargetId(normalizedTarget),
+        error?.message || String(error)
+      )
+      refreshStorageProviders(connections.manager, pendingConfig)
+      throw error
+    }
+  }, progress), [
+    backupPreferences.mode,
+    deviceBackupPreferences,
+    createWalletStorageProvider,
+    managers.storageConnections,
+    managers.wallet,
+    refreshStorageProviders,
+    runStorageOperation,
+    saveStorageConfig,
+    selectedNetwork,
+    storageConfig,
+    throwIfStorageOperationCancelled
+  ])
+
+  const syncBackupStorage = useCallback(async (
+    progress?: (message: string) => void,
+    options?: { automatic?: boolean }
+  ): Promise<void> => runStorageOperation('sync-backups', async report => {
+    const connections = managers.storageConnections
+    const storageManager = connections?.manager
+    const wallet = managers.wallet
+    if (!storageManager || !wallet || !connections) throw new Error('Wallet storage is not ready')
+    if (storageConfig.pendingOperation) {
+      throw new Error('Restart the wallet to recover the interrupted storage operation before syncing')
+    }
+    if (storageConfig.backups.length === 0) throw new Error('No backup storage providers are configured')
+
+    // Retry providers that were unavailable during wallet startup. This makes
+    // both the manual sync button and the online/periodic retry path self-healing
+    // without requiring a restart.
+    for (const target of storageConfig.backups) {
+      throwIfStorageOperationCancelled()
+      if (findStoreForTarget(connections.manager.getStores(), target)) continue
+      try {
+        report(`Reconnecting ${walletStorageTargetId(target)}...`)
+        const attached = await createWalletStorageProvider(
+          wallet,
+          target,
+          selectedNetwork,
+          storageConfig.localStorageIdentityKey,
+          createWalletTelemetryConfig(), target.kind === 'local'
+        )
+        await connections.attach(target, attached.provider, storageConfig, report, true)
+        storageProviderErrorsRef.current.delete(walletStorageTargetId(target))
+      } catch (error: any) {
+        storageProviderErrorsRef.current.set(
+          walletStorageTargetId(target),
+          error?.message || String(error)
+        )
+      }
+    }
+
+    const result = await connections.sync(storageConfig, report)
+    throwIfStorageOperationCancelled()
+    for (const target of result.synced) storageProviderErrorsRef.current.delete(walletStorageTargetId(target))
+    for (const [id, error] of result.errors) storageProviderErrorsRef.current.set(id, error.message)
+    const attachedTargets = result.synced
+    const next = saveStorageConfig(markWalletStorageSynced(storageConfig, attachedTargets))
+    refreshStorageProviders(connections.manager, next)
+    const unavailable = storageConfig.backups.filter(target =>
+      !attachedTargets.some(synced => walletStorageTargetsEqual(synced, target))
+    )
+    if (unavailable.length > 0) {
+      throw new Error(`${unavailable.length} backup${unavailable.length === 1 ? '' : 's'} could not finish. Other available copies were saved.`)
+    }
+    reportDiagnosticEvent('wallet.storage.backups_synced', {
+      surface: 'wallet-storage',
+      context: { backupCount: attachedTargets.length }
+    })
+  }, progress, options?.automatic), [
+    createWalletStorageProvider,
+    managers.storageConnections,
+    managers.wallet,
+    refreshStorageProviders,
+    runStorageOperation,
+    saveStorageConfig,
+    selectedNetwork,
+    storageConfig,
+    throwIfStorageOperationCancelled
+  ])
+
+  const getArchiveSource = useCallback(async (
+    synchronize: boolean, progress?: (message: string) => void
+  ): Promise<ArchiveSource> => runStorageOperation('portable-data', async report => {
+    const scope = storageScopeRef.current, connections = managers.storageConnections, wallet = managers.wallet
+    if (!scope || !connections || !wallet) throw new PortabilityError('storage')
+    let config = storageConfig
+    const local: WalletStorageTarget = { kind: 'local' }
+    if (config.primary.kind !== 'local' && synchronize) {
+      const exists = config.backups.some(target => target.kind === 'local')
+      if (config.pendingOperation && !isMatchingPendingWalletStorageOperation(config, 'add-backup', local)) throw new PortabilityError('busy')
+      report('Synchronizing this device copy with the main wallet location… Wallet calls may wait.')
+      if (!exists && !config.pendingOperation) {
+        const copy = await createWalletStorageProvider(wallet, local, scope.network, config.localStorageIdentityKey, createWalletTelemetryConfig())
+        try {
+          await connections.copyForExport(copy.provider, config, report)
+          throwIfStorageOperationCancelled()
+          config = saveStorageConfig(markWalletStorageSynced({ ...config, localStorageIdentityKey: copy.storageIdentityKey }, [local]))
+        } finally { await copy.provider.destroy() }
+      } else {
+        let attached
+        if (exists && !config.pendingOperation) {
+          attached = await createWalletStorageProvider(wallet, local, scope.network, config.localStorageIdentityKey, createWalletTelemetryConfig(), true)
+        } else {
+          const prepared = await prepareWalletBackupSetup(config, local, async () =>
+            await createWalletStorageProvider(wallet, local, scope.network, config.localStorageIdentityKey, createWalletTelemetryConfig()),
+          saveStorageConfig, createStorageOperationId)
+          config = prepared.pendingConfig
+          attached = prepared.attached
+        }
+        throwIfStorageOperationCancelled()
+        await connections.attach(local, attached.provider, config, report, true)
+        throwIfStorageOperationCancelled()
+        config = saveStorageConfig(clearPendingWalletStorageOperation(markWalletStorageSynced({
+          ...(config.backups.some(target => target.kind === 'local') ? config : addBackupTarget(config, local)), localStorageIdentityKey: attached.storageIdentityKey
+        }, [local])))
+        refreshStorageProviders(connections.manager, config)
+      }
+    }
+    if (config.primary.kind !== 'local' && (!config.lastSuccessfulSyncAt.local || config.pendingOperation)) throw new PortabilityError('storage')
+    const binding = await resolveLocalWalletDatabase(localStorage, scope.network, scope.identityKey, config.localStorageIdentityKey, true)
+    return { databaseName: binding.name, identityKey: scope.identityKey, chain: scope.network,
+      lastSyncedAt: config.lastSuccessfulSyncAt.local, copiedFrom: config.primary.kind === 'remote' ? config.primary.url : 'This device (main wallet location)' }
+  }, progress), [createWalletStorageProvider, managers.storageConnections, managers.wallet, refreshStorageProviders,
+    runStorageOperation, saveStorageConfig, storageConfig, throwIfStorageOperationCancelled])
+
+  const mergeWalletArchive = useCallback(async (
+    id: string, progress: (message: string) => void, signal?: AbortSignal
+  ): Promise<ArchiveJob> => {
+    const job = await loadArchiveJob(id)
+    const source = await getArchiveSource(job.state !== 'merging', progress)
+    return await runStorageOperation('portable-data', async report => {
+      const connections = managers.storageConnections
+      if (!connections || storageScopeRef.current?.identityKey !== source.identityKey || storageScopeRef.current.network !== source.chain) throw new PortabilityError('stale')
+      const manager = connections.manager
+      const target = `${walletStorageTargetId(storageConfig.primary)}:${manager.getActiveStore()}`
+      return await manager.runAsSync(async active => {
+        throwIfStorageOperationCancelled()
+        const prepared = await runPortabilityWorker<ArchiveJob>({ operation: 'merge', id, source, target }, report, signal)
+        throwIfStorageOperationCancelled()
+        if (signal?.aborted) throw new PortabilityError('cancelled')
+        const reader = await openArchiveStorage(prepared.mergeDatabaseName!, source.chain)
+        const getChunk = reader.getSyncChunk.bind(reader)
+        reader.getSyncChunk = async args => {
+          throwIfStorageOperationCancelled()
+          if (signal?.aborted) throw new PortabilityError('cancelled')
+          const chunk = await getBoundedWalletStorageUploadChunk<sdk.RequestSyncChunkArgs, sdk.SyncChunk>(applyWalletStorageUploadChunkLimits(args), getChunk, true)
+          report(encodeWalletStorageSyncProgress(summarizeWalletStorageSyncChunk(args, chunk)))
+          return chunk
+        }
+        report('Merging into the current main location… Completed pages are retained if stopped; reopen this import to resume.')
+        try {
+          const checkedWriter = new Proxy(active, {
+            get (target, property) {
+              if (property === 'processSyncChunk') return async (...args: Parameters<sdk.WalletStorageSync['processSyncChunk']>) => {
+                const result = await target.processSyncChunk(...args)
+                if (!result || result.error || !Number.isSafeInteger(result.inserts) || !Number.isSafeInteger(result.updates)) throw new PortabilityError('storage')
+                return result
+              }
+              const value = Reflect.get(target, property)
+              return typeof value === 'function' ? value.bind(target) : value
+            }
+          })
+          const result = await manager.syncFromReader(source.identityKey, reader, checkedWriter)
+          return await updateArchiveJob(id, { state: 'merged', inserts: result.inserts, updates: result.updates, completedAt: new Date().toISOString() })
+        } finally { await reader.destroy() }
+      })
+    }, progress)
+  }, [getArchiveSource, managers.storageConnections, runStorageOperation, storageConfig.primary, throwIfStorageOperationCancelled])
+
+  const activateWalletArchive = useCallback(async (
+    id: string, progress: (message: string) => void, signal?: AbortSignal
+  ): Promise<void> => runStorageOperation('portable-data', async report => {
+    const job = await loadArchiveJob(id), scope = storageScopeRef.current
+    if (!job.summary || job.summary.chain !== selectedNetwork || (scope && (scope.identityKey !== job.summary.identityKey || scope.network !== job.summary.chain))) throw new PortabilityError('identity')
+    const prepared = await runPortabilityWorker<ArchiveJob>({ operation: 'activate', id }, report, signal)
+    throwIfStorageOperationCancelled()
+    if (signal?.aborted) throw new PortabilityError('cancelled')
+    const commit = async () => {
+      report('Selecting the restored working copy and restarting…')
+      await invoke('set_wallet_bridge_accepts_requests', { accepts: false })
+      commitArchiveActivation(localStorage, prepared)
+      await updateArchiveJob(id, { state: 'active', completedAt: new Date().toISOString() })
+      window.location.hash = '/'
+      window.location.reload()
+    }
+    if (managers.storageConnections) await managers.storageConnections.manager.closeForRestore(commit)
+    else await commit()
+  }, progress), [managers.storageConnections, runStorageOperation, selectedNetwork, throwIfStorageOperationCancelled])
+
+  const runLocalStorageBenchmark = useCallback(async (
+    progress?: (message: string) => void,
+    options?: { sourceUrl?: string; maxPages?: number }
+  ): Promise<WalletStorageBenchmarkResult> => runStorageOperation('local-benchmark', async report => {
+    const storageManager = managers.storageManager
+    if (!storageManager) throw new Error('Wallet storage is not ready')
+    if (storageConfig.primary.kind !== 'remote') {
+      throw new Error('The isolated benchmark requires remote storage to remain primary')
+    }
+    if (!storageManager.isActiveEnabled) {
+      throw new Error('The configured remote primary is not active and enabled')
+    }
+
+    const chain = selectedNetwork
+    let source: sdk.WalletStorageProvider | undefined
+    if (options?.sourceUrl) {
+      const target = normalizeWalletStorageTarget({ kind: 'remote', url: options.sourceUrl })
+      if (![storageConfig.primary, ...storageConfig.backups].some(configured => walletStorageTargetsEqual(configured, target))) {
+        throw new Error('Select a configured remote provider for the benchmark')
+      }
+      const attached = await createWalletStorageProvider(
+        managers.wallet, target, chain, storageConfig.localStorageIdentityKey, createWalletTelemetryConfig()
+      )
+      source = attached.provider
+    }
+    const benchmarkId = createStorageOperationId()
+    const databaseName = `wallet-toolbox-benchmark-${chain}net-${benchmarkId}`
+    const writer = new StorageIdb({
+      chain,
+      commissionSatoshis: 0,
+      commissionPubKeyHex: undefined,
+      feeModel: { model: 'sat/kb', value: 1 }
+    })
+    writer.dbName = databaseName
+    setStorageBenchmark(undefined)
+    report('Starting an isolated remote-to-local benchmark. Wallet storage configuration will not be changed.')
+
+    let benchmark: Omit<WalletStorageBenchmarkResult, 'cleanupSucceeded'> | undefined
+    let cleanupSucceeded = false
+    try {
+      await writer.migrate('Peacock isolated local benchmark', createLocalStorageIdentityKey())
+      benchmark = await runWalletStorageBenchmark({
+        manager: storageManager,
+        writer,
+        databaseName,
+        source,
+        maxPages: options?.maxPages,
+        report,
+        throwIfCancelled: throwIfStorageOperationCancelled
+      })
+    } finally {
+      try {
+        await writer.destroy()
+        await writer.dropAllData()
+        cleanupSucceeded = true
+        report('Removed the isolated benchmark database.')
+      } catch (cleanupError) {
+        reportDiagnosticError('wallet.storage.benchmark_cleanup_failed', cleanupError, {
+          surface: 'wallet-storage',
+          context: { databaseName }
+        })
+        report(`Could not remove isolated benchmark database ${databaseName}.`)
+      }
+    }
+
+    if (!benchmark) throw new Error('Wallet storage benchmark did not complete')
+    const result: WalletStorageBenchmarkResult = { ...benchmark, cleanupSucceeded }
+    setStorageBenchmark(result)
+    report(
+      `${result.complete ? 'Full copy complete' : 'Partial sample complete'}: ${result.totals.records.toLocaleString()} records in ` +
+      `${(result.durationMs / 1000).toFixed(1)}s ` +
+      `(${result.totals.recordsPerSecond.toFixed(1)} records/s overall).`
+    )
+    console.info('[wallet-storage-benchmark]', result)
+    return result
+  }, progress), [
+    managers.storageManager,
+    managers.wallet,
+    createWalletStorageProvider,
+    runStorageOperation,
+    selectedNetwork,
+    storageConfig,
+    throwIfStorageOperationCancelled
+  ])
+
+  const setPrimaryStorage = useCallback(async (
+    target: WalletStorageTarget,
+    progress?: (message: string) => void
+  ): Promise<void> => runStorageOperation('set-primary', async report => {
+    const normalizedTarget = normalizeWalletStorageTarget(target)
+    const storageManager = managers.storageManager
+    if (!storageManager) throw new Error('Wallet storage is not ready')
+    if (walletStorageTargetsEqual(storageConfig.primary, normalizedTarget)) return
+
+    // Validate target membership before recording an operation that needs recovery.
+    makePrimaryTarget(storageConfig, normalizedTarget)
+    const targetStore = findStoreForTarget(storageManager.getStores(), normalizedTarget)
+    if (!targetStore) throw new Error('The requested primary storage provider is unavailable')
+
+    let pendingConfig = beginWalletStorageOperation(
+      { ...storageConfig, backupMode: 'profile', automaticBackups: backupPreferences.automatic },
+      'set-primary',
+      normalizedTarget,
+      createStorageOperationId()
+    )
+    pendingConfig = saveStorageConfig(pendingConfig)
+
+    report('Synchronizing all providers before changing the primary...')
+    await storageManager.setActive(targetStore.storageIdentityKey, message => {
+      report(message)
+      return message
+    })
+    throwIfStorageOperationCancelled()
+
+    let finalConfig = makePrimaryTarget(pendingConfig, normalizedTarget)
+    await enforceConfiguredPrimary(storageManager, finalConfig, report)
+    throwIfStorageOperationCancelled()
+    finalConfig = markWalletStorageSynced(finalConfig, finalConfig.backups)
+    finalConfig = saveStorageConfig(clearPendingWalletStorageOperation(finalConfig))
+    refreshStorageProviders(storageManager, finalConfig)
+
+    storageConnectionWarmerRef.current?.clear()
+    storageConnectionWarmerRef.current = finalConfig.primary.kind === 'remote'
+      ? createStorageConnectionWarmer(finalConfig.primary.url)
+      : undefined
+    reportDiagnosticEvent('wallet.storage.primary_changed', {
+      surface: 'wallet-storage',
+      context: { target: walletStorageTargetId(normalizedTarget) }
+    })
+    report('Primary storage changed successfully.')
+  }, progress), [
+    backupPreferences.automatic,
+    managers.storageManager,
+    refreshStorageProviders,
+    runStorageOperation,
+    saveStorageConfig,
+    storageConfig,
+    throwIfStorageOperationCancelled
+  ])
+
+  const removeBackupStorage = useCallback(async (
+    target: WalletStorageTarget,
+    progress?: (message: string) => void
+  ): Promise<void> => runStorageOperation('remove-backup', async report => {
+    if (backupPreferences.mode === 'device') throw new Error('Change the shared backup destinations in device defaults, or choose independent profile settings')
+    const normalizedTarget = normalizeWalletStorageTarget(target)
+    if (!storageConfig.backups.some(backup => walletStorageTargetsEqual(backup, normalizedTarget))) return
+    const storageManager = managers.storageManager
+    if (!storageManager) throw new Error('Wallet storage is not ready')
+    if (storageConfig.pendingOperation) {
+      throw new Error('Restart the wallet to recover the interrupted storage operation before removing a backup')
+    }
+
+    if (findStoreForTarget(storageManager.getStores(), normalizedTarget)) {
+      report('Synchronizing connected backups before disconnecting...')
+      try {
+        await storageManager.updateBackups(undefined, message => {
+          report(message)
+          return message
+        })
+      } catch (error: any) {
+        if (error instanceof WalletStorageOperationCancelledError) throw error
+        // A failed backup must remain removable. This is a disconnect, not a
+        // deletion: its last durable copy remains available for later recovery.
+        const message = error?.message || String(error)
+        report(`Final synchronization failed; disconnecting the retained backup anyway: ${message}`)
+        reportDiagnosticError('wallet.storage.backup_disconnect_sync_failed', error, {
+          surface: 'wallet-storage',
+          context: { target: walletStorageTargetId(normalizedTarget) }
+        })
+      }
+    }
+
+    throwIfStorageOperationCancelled()
+    const next = saveStorageConfig(removeBackupTarget(storageConfig, normalizedTarget))
+    storageProviderErrorsRef.current.delete(walletStorageTargetId(normalizedTarget))
+    refreshStorageProviders(storageManager, next)
+    reportDiagnosticEvent('wallet.storage.backup_removed', {
+      surface: 'wallet-storage',
+      context: { target: walletStorageTargetId(normalizedTarget) }
+    })
+
+    // The pinned Wallet Toolbox has no provider-detach API. Reload immediately after
+    // the durable config update so the removed provider cannot receive writes in
+    // this session. Local IndexedDB data is retained; this is a disconnect only.
+    window.location.reload()
+  }, progress), [
+    backupPreferences.mode,
+    managers.storageManager,
+    refreshStorageProviders,
+    runStorageOperation,
+    saveStorageConfig,
+    storageConfig,
+    throwIfStorageOperationCancelled
+  ])
+
+  const cancelBackupSetup = useCallback(async (): Promise<void> => runStorageOperation('cancel-setup', async report => {
+    if (storageConfig.pendingOperation?.kind !== 'add-backup') throw new Error('No unfinished backup setup to cancel')
+    const connections = managers.storageConnections
+    if (!connections) throw new Error('Wallet storage is not ready')
+    report('Checking your main wallet location. Copied backup data will be kept.')
+    const installPrimary = await connections.preparePrimary(storageConfig)
+    const next = saveStorageConfig(clearPendingWalletStorageOperation(storageConfig))
+    installPrimary()
+    storageProviderErrorsRef.current.delete(walletStorageTargetId(storageConfig.pendingOperation.target))
+    refreshStorageProviders(connections.manager, next)
+    report('Setup cancelled. Your main wallet is ready; any copied data remains at the backup location.')
+  }), [managers.storageConnections, refreshStorageProviders, runStorageOperation, saveStorageConfig, storageConfig])
+
+  const saveBackupPreferences = useCallback(async (mode: 'device' | 'profile', preferences: DeviceBackupPreferences): Promise<void> =>
+    runStorageOperation('portable-data', async report => {
+      const scope = storageScopeRef.current, connections = managers.storageConnections
+      if (!scope || !connections || storageConfig.pendingOperation) throw new PortabilityError('busy')
+      report('Saving backup preferences and restarting this profile…')
+      await connections.manager.closeForRestore(async () => {
+        if (mode === 'device') saveDeviceBackupPreferences(localStorage, scope.network, preferences)
+        const next = { ...storageConfig, backupMode: mode, automaticBackups: preferences.automatic }
+        saveStorageConfig(reconcileBackupPreferences(next, preferences))
+        await invoke('set_wallet_bridge_accepts_requests', { accepts: false })
+        window.location.reload()
+      })
+    }), [managers.storageConnections, runStorageOperation, saveStorageConfig, storageConfig])
+
+  const setUpPreferredBackup = useCallback(async (): Promise<void> => {
+    const missing = missingPreferredBackups(storageConfig, backupPreferences)[0]
+    if (missing) await addBackupStorage(missing)
+  }, [addBackupStorage, backupPreferences, storageConfig])
+  const setUpPreferredBackupRef = useRef(setUpPreferredBackup)
+  useEffect(() => { setUpPreferredBackupRef.current = setUpPreferredBackup }, [setUpPreferredBackup])
+
+  const syncBackupStorageRef = useRef(syncBackupStorage)
+  useEffect(() => {
+    syncBackupStorageRef.current = syncBackupStorage
+  }, [syncBackupStorage])
+
+  useEffect(() => {
+    const missing = missingPreferredBackups(storageConfig, backupPreferences).length > 0
+    if (!managers.storageConnections || !backupPreferences.automatic || (!missing && storageConfig.backups.length === 0) || storageConfig.pendingOperation) {
+      return undefined
+    }
+    const retry = () => {
+      if (storageOperationRef.current) return
+      const operation = missing ? setUpPreferredBackupRef.current() : syncBackupStorageRef.current(undefined, { automatic: true })
+      void operation.catch(() => {
+        // The operation already records bounded diagnostics and provider status.
+      })
+    }
+    const initialRetry = window.setTimeout(retry, 0)
+    const interval = window.setInterval(retry, 5 * 60 * 1000)
+    window.addEventListener('online', retry)
+    return () => {
+      window.clearTimeout(initialRetry)
+      window.clearInterval(interval)
+      window.removeEventListener('online', retry)
+    }
+  }, [managers.storageConnections, storageConfig.backups.length, storageConfig.pendingOperation, backupPreferences.mode, backupPreferences.automatic, deviceBackupPreferences])
 
 
   // Load snapshot function
@@ -1208,7 +2227,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         reportDiagnosticError('wallet.snapshot_load_failed', err, {
           surface: 'wallet-lifecycle'
         })
-        removeWalletEnvironmentStorageItem('snap'); // Clear invalid snapshot
+        // Provider outages must not erase the user's saved recovery snapshot.
         toast.error("Couldn't load saved data: " + err.message);
       }
     }
@@ -1242,6 +2261,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
         })
 
         const hydrateFromStorage = async () => {
+          setWalletHydrating(true)
+          setWalletStartupError(undefined)
           try {
             await loadWalletSnapshot(walletManager);
             const { keyHex } = reconcileStoredKeyMaterial();
@@ -1252,15 +2273,20 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
               await walletManager.providePrivilegedKeyManager(privilegedManager);
             }
           } catch (err: any) {
+            setWalletStartupError(err?.message || 'Your saved wallet could not be opened. Retry or choose another network.')
             console.error('Error hydrating wallet from storage:', err);
             reportDiagnosticError('wallet.storage_hydration_failed', err, {
               surface: 'wallet-lifecycle'
             })
+          } finally {
+            setWalletHydrating(false)
           }
         };
 
         hydrateFromStorage();
       } catch (err: any) {
+        setWalletHydrating(false)
+        setWalletStartupError(err?.message || 'The wallet could not be initialized.')
         console.error("Error initializing wallet manager:", err);
         reportDiagnosticError('wallet.manager_initialization_failed', err, {
           surface: 'wallet-lifecycle',
@@ -1414,45 +2440,32 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     }
   }, [markRegionCurrencyPrompted, regionCurrencyPromptSuggested, settings, updateSettings])
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    storageProfileChangingRef.current = true
+    if (storageOperationRef.current) {
+      storageOperationCancelRequestedRef.current = true
+      await storageOperationDoneRef.current
+    }
+    storageScopeRef.current = undefined
     storageConnectionWarmerRef.current?.clear()
     storageConnectionWarmerRef.current = undefined
-    const preserved: Record<string, string> = {}
+    if (managers.storageConnections) await managers.storageConnections.manager.closeForRestore(async () => {})
     const activeEnvironmentPrefix = walletEnvironmentStoragePrefix()
     const preserveLegacyMainnetUnlock = ACTIVE_WALLET_ENVIRONMENT.name !== 'mainnet'
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i)
-        if (!key) continue
-        const belongsToAnotherEnvironment = key.startsWith('peacock:') &&
-          key.includes(':wallet:v1:') &&
-          !key.startsWith(activeEnvironmentPrefix)
-        const isLegacyMainnetUnlock = preserveLegacyMainnetUnlock &&
-          ['snap', 'primaryKeyHex', 'mnemonic12'].includes(key)
-        if (
-          key === WALLET_ENVIRONMENT_STORAGE_KEY ||
-          key.startsWith('uw_region_currency_prompted_v1:') ||
-          key.startsWith('uw_first_login_done_v1:') ||
-          belongsToAnotherEnvironment ||
-          isLegacyMainnetUnlock
-        ) {
-          const value = localStorage.getItem(key)
-          if (value != null) preserved[key] = value
-        }
-      }
-    } catch {
-      // ignore
-    }
-
-    // Clear localStorage to prevent auto-login
-    localStorage.clear();
-
-    try {
-      for (const [key, value] of Object.entries(preserved)) {
-        localStorage.setItem(key, value)
-      }
-    } catch {
-      // ignore
+    // Remove session keys in place. Clearing and rewriting could lose retained
+    // recovery bindings or other environments if a quota/write failure occurs.
+    for (const key of Object.keys(localStorage)) {
+      const belongsToAnotherEnvironment = key.startsWith('peacock:') &&
+        key.includes(':wallet:v1:') && !key.startsWith(activeEnvironmentPrefix)
+      const isLegacyMainnetUnlock = preserveLegacyMainnetUnlock &&
+        ['snap', 'primaryKeyHex', 'mnemonic12'].includes(key)
+      const keep = key.startsWith('peacock.wallet-') ||
+        key.startsWith(DEVICE_BACKUP_PREFERENCES_KEY) ||
+        key === WALLET_ENVIRONMENT_STORAGE_KEY ||
+        key.startsWith('uw_region_currency_prompted_v1:') ||
+        key.startsWith('uw_first_login_done_v1:') ||
+        belongsToAnotherEnvironment || isLegacyMainnetUnlock
+      if (!keep) localStorage.removeItem(key)
     }
     // Reset manager state
     setManagers({});
@@ -1461,7 +2474,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     setSettingsLoaded(false)
 
     setSnapshotLoaded(false);
-  }, []);
+    storageProfileChangingRef.current = false
+  }, [managers.storageConnections]);
 
   // Automatically set active profile when wallet manager becomes available
   useEffect(() => {
@@ -2021,6 +3035,25 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     updateSettings,
     network: ACTIVE_WALLET_ENVIRONMENT.networkPreset,
     environment: ACTIVE_WALLET_ENVIRONMENT,
+    storageConfig,
+    storageProviders,
+    storageOperation,
+    storageBenchmark,
+    addBackupStorage,
+    removeBackupStorage,
+    syncBackupStorage,
+    setPrimaryStorage,
+    runLocalStorageBenchmark,
+    cancelBackupSetup,
+    cancelStorageOperation,
+    deviceBackupPreferences,
+    backupPreferences,
+    saveBackupPreferences,
+    setUpPreferredBackup,
+    walletDataIdentity: storageScopeRef.current?.identityKey,
+    getArchiveSource,
+    mergeWalletArchive,
+    activateWalletArchive,
     activeProfile: activeProfile,
     setActiveProfile: setActiveProfile,
     logout,
@@ -2028,6 +3061,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     setPasswordRetriever,
     setRecoveryKeySaver,
     snapshotLoaded,
+    walletHydrating,
+    walletStartupError,
     basketRequests,
     certificateRequests,
     protocolRequests,
@@ -2057,6 +3092,8 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     setPasswordRetriever,
     setRecoveryKeySaver,
     snapshotLoaded,
+    walletHydrating,
+    walletStartupError,
     basketRequests,
     certificateRequests,
     protocolRequests,
@@ -2072,7 +3109,25 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     registryFromPermissions,
     identityClient,
     advanceGroupQueue,
-    advanceCounterpartyPermissionQueue
+    advanceCounterpartyPermissionQueue,
+    storageConfig,
+    storageProviders,
+    storageOperation,
+    storageBenchmark,
+    addBackupStorage,
+    removeBackupStorage,
+    syncBackupStorage,
+    setPrimaryStorage,
+    runLocalStorageBenchmark,
+    cancelBackupSetup,
+    cancelStorageOperation,
+    getArchiveSource,
+    mergeWalletArchive,
+    activateWalletArchive,
+    deviceBackupPreferences,
+    backupPreferences,
+    saveBackupPreferences,
+    setUpPreferredBackup
   ]);
 
   return (

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { useState, useContext, useEffect, useMemo, useCallback } from 'react'
 import {
   Typography,
@@ -194,6 +195,9 @@ const Settings: React.FC = () => {
         Control Peacock's appearance, privacy, currency, network, recovery material, and session.
       </Typography>
 
+      <Button component={Link} to="/dashboard/settings/backups" variant="outlined" sx={{ mb: 3 }}>
+        Backups and portable wallet data
+      </Button>
       {settingsLoading && (
         <Box sx={{ width: '100%', mb: 2 }}>
           <LinearProgress />

@@ -26,7 +26,7 @@ import {
 import { localChaintracksManager, type ChaintracksMode } from '../../../chaintracks/localChaintracks'
 
 const AdvancedSettings: React.FC = () => {
-  const { settings, updateSettings, logout } = useContext(WalletContext)
+  const { settings, updateSettings, logout, environment } = useContext(WalletContext)
   const navigate = useNavigate()
 
   const [settingsLoading, setSettingsLoading] = useState(false)
@@ -184,123 +184,135 @@ const AdvancedSettings: React.FC = () => {
       </Paper>
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 3 }}>
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
-          <Typography variant="h4">Device Chain Verification</Typography>
-          <Chip size="small" color="warning" label="Experimental" />
-          <Chip
-            size="small"
-            color={
-              chainStatus.phase === 'ready' && chainStatus.consistency !== 'diverged'
-                ? 'success'
-                : 'warning'
-            }
-            label={`${chainStatus.phase} · ${chainStatus.consistency}`}
-          />
-        </Box>
-        <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
-          Remote ChainTracks is the stable default. Experimental local verification keeps a
-          persistent chain on this device, seeded by a packaged checkpoint through height{' '}
-          {chainStatus.checkpointHeight.toLocaleString()}. Local headers synchronize only when the
-          experimental mode is selected.
-        </Typography>
+        {environment.chain === 'main' ? (
+          <>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+              <Typography variant="h4">Device Chain Verification</Typography>
+              <Chip size="small" color="warning" label="Experimental" />
+              <Chip
+                size="small"
+                color={
+                  chainStatus.phase === 'ready' && chainStatus.consistency !== 'diverged'
+                    ? 'success'
+                    : 'warning'
+                }
+                label={`${chainStatus.phase} · ${chainStatus.consistency}`}
+              />
+            </Box>
+            <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
+              Remote ChainTracks is the stable default. Experimental local verification keeps a
+              persistent chain on this device, seeded by a packaged checkpoint through height{' '}
+              {chainStatus.checkpointHeight.toLocaleString()}. Local headers synchronize only when the
+              experimental mode is selected.
+            </Typography>
 
-        <RadioGroup
-          row
-          value={chainStatus.mode}
-          onChange={(event) =>
-            void runChainAction('mode change', () =>
-              localChaintracksManager.setMode(event.target.value as ChaintracksMode)
-            )
-          }
-        >
-          <FormControlLabel
-            value="remote-only"
-            control={<Radio />}
-            label="Remote ChainTracks (recommended)"
-          />
-          <FormControlLabel
-            value="local-primary"
-            control={<Radio />}
-            label="Local ChainTracks (experimental)"
-          />
-        </RadioGroup>
-
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
-            gap: 1,
-            my: 2
-          }}
-        >
-          <Typography variant="body2">Network: {chainStatus.chain}</Typography>
-          <Typography variant="body2">Active source: {chainStatus.activeSource}</Typography>
-          <Typography variant="body2">
-            Local height: {chainStatus.localHeight?.toLocaleString() ?? 'Bootstrapping'}
-          </Typography>
-          <Typography variant="body2">
-            Reference height: {chainStatus.referenceHeight?.toLocaleString() ?? 'Not checked'}
-          </Typography>
-          <Typography variant="body2">
-            Height lag: {chainStatus.heightLag ?? 'Not checked'}
-          </Typography>
-          <Typography variant="body2">Storage: {formatBytes(chainStatus.storageBytes)}</Typography>
-          <Typography
-            variant="body2"
-            sx={{ gridColumn: { sm: '1 / -1' }, overflowWrap: 'anywhere' }}
-          >
-            Local tip: {chainStatus.localTipHash ?? 'Not available'}
-          </Typography>
-          <Typography variant="body2" sx={{ gridColumn: { sm: '1 / -1' } }}>
-            Last check:{' '}
-            {chainStatus.checkedAt
-              ? new Date(chainStatus.checkedAt).toLocaleString()
-              : 'Not checked'}
-          </Typography>
-        </Box>
-
-        {chainStatus.lastError && (
-          <Typography variant="body2" color="error" sx={{ mb: 2, overflowWrap: 'anywhere' }}>
-            {chainStatus.lastError}
-          </Typography>
-        )}
-
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-          <Button
-            variant="contained"
-            disabled={chainAction != null || chainStatus.mode !== 'local-primary'}
-            onClick={() => void runChainAction('sync', () => localChaintracksManager.syncNow())}
-          >
-            Sync now
-          </Button>
-          <Button
-            variant="outlined"
-            disabled={chainAction != null || chainStatus.mode !== 'local-primary'}
-            onClick={() =>
-              void runChainAction('consistency check', () =>
-                localChaintracksManager.checkConsistency()
-              )
-            }
-          >
-            Check local tip
-          </Button>
-          <Button
-            variant="outlined"
-            color="warning"
-            disabled={chainAction != null || chainStatus.mode !== 'local-primary'}
-            onClick={() => {
-              if (
-                window.confirm(
-                  'Clear downloaded headers and rebuild local chain state from the packaged checkpoint? Wallet keys and transaction data are not affected.'
+            <RadioGroup
+              row
+              value={chainStatus.mode}
+              onChange={(event) =>
+                void runChainAction('mode change', () =>
+                  localChaintracksManager.setMode(event.target.value as ChaintracksMode)
                 )
-              ) {
-                void runChainAction('reset', () => localChaintracksManager.clearLocalData())
               }
-            }}
-          >
-            Clear and rebuild headers
-          </Button>
-        </Box>
+            >
+              <FormControlLabel
+                value="remote-only"
+                control={<Radio />}
+                label="Remote ChainTracks (recommended)"
+              />
+              <FormControlLabel
+                value="local-primary"
+                control={<Radio />}
+                label="Local ChainTracks (experimental)"
+              />
+            </RadioGroup>
+
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+                gap: 1,
+                my: 2
+              }}
+            >
+              <Typography variant="body2">Network: {chainStatus.chain}</Typography>
+              <Typography variant="body2">Active source: {chainStatus.activeSource}</Typography>
+              <Typography variant="body2">
+                Local height: {chainStatus.localHeight?.toLocaleString() ?? 'Bootstrapping'}
+              </Typography>
+              <Typography variant="body2">
+                Reference height: {chainStatus.referenceHeight?.toLocaleString() ?? 'Not checked'}
+              </Typography>
+              <Typography variant="body2">
+                Height lag: {chainStatus.heightLag ?? 'Not checked'}
+              </Typography>
+              <Typography variant="body2">Storage: {formatBytes(chainStatus.storageBytes)}</Typography>
+              <Typography
+                variant="body2"
+                sx={{ gridColumn: { sm: '1 / -1' }, overflowWrap: 'anywhere' }}
+              >
+                Local tip: {chainStatus.localTipHash ?? 'Not available'}
+              </Typography>
+              <Typography variant="body2" sx={{ gridColumn: { sm: '1 / -1' } }}>
+                Last check:{' '}
+                {chainStatus.checkedAt
+                  ? new Date(chainStatus.checkedAt).toLocaleString()
+                  : 'Not checked'}
+              </Typography>
+            </Box>
+
+            {chainStatus.lastError && (
+              <Typography variant="body2" color="error" sx={{ mb: 2, overflowWrap: 'anywhere' }}>
+                {chainStatus.lastError}
+              </Typography>
+            )}
+
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                disabled={chainAction != null || chainStatus.mode !== 'local-primary'}
+                onClick={() => void runChainAction('sync', () => localChaintracksManager.syncNow())}
+              >
+                Sync now
+              </Button>
+              <Button
+                variant="outlined"
+                disabled={chainAction != null || chainStatus.mode !== 'local-primary'}
+                onClick={() =>
+                  void runChainAction('consistency check', () =>
+                    localChaintracksManager.checkConsistency()
+                  )
+                }
+              >
+                Check local tip
+              </Button>
+              <Button
+                variant="outlined"
+                color="warning"
+                disabled={chainAction != null || chainStatus.mode !== 'local-primary'}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      'Clear downloaded headers and rebuild local chain state from the packaged checkpoint? Wallet keys and transaction data are not affected.'
+                    )
+                  ) {
+                    void runChainAction('reset', () => localChaintracksManager.clearLocalData())
+                  }
+                }}
+              >
+                Clear and rebuild headers
+              </Button>
+            </Box>
+          </>
+        ) : (
+          <>
+            <Typography variant="h4" sx={{ mb: 1 }}>Device Chain Verification</Typography>
+            <Typography variant="body1" color="textSecondary">
+              TerraTestNet uses its configured remote chain verifier. On-device header
+              verification is available only on Mainnet.
+            </Typography>
+          </>
+        )}
       </Paper>
 
       <Paper elevation={0} sx={{ p: 3, bgcolor: 'background.paper', mt: 3 }}>

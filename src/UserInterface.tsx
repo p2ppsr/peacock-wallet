@@ -4,6 +4,7 @@ import { HashRouter as Router, Routes, Route } from 'react-router-dom'
 import 'react-toastify/dist/ReactToastify.css'
 import { BreakpointProvider } from './utils/useBreakpoints'
 import { ExchangeRateContextProvider } from './components/AmountDisplay/ExchangeRateContextProvider'
+const WalletDataRecovery = lazy(() => import('./pages/Recovery/WalletData'))
 const Greeter = lazy(() => import('./pages/Greeter'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 import BasketAccessHandler from './components/BasketAccessHandler'
@@ -69,6 +70,7 @@ const UserInterface: React.FC<UserInterfaceProps> = ({ onWalletReady, nativeHand
                 <UpdateManager checkOnMount={true} interval={3600000} />
                 <Suspense fallback={<PageLoading />}>
                   <Routes>
+                    <Route path='/recovery/wallet-data' element={<WalletDataRecovery />} />
                     <Route path='/' element={<Greeter />} />
                     <Route path='/dashboard/*' element={<Dashboard />} />
                   </Routes>
