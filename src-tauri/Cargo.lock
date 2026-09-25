@@ -4768,7 +4768,7 @@ dependencies = [
 
 [[package]]
 name = "user-wallet"
-version = "0.9.4"
+version = "0.9.5"
 dependencies = [
  "dashmap",
  "hyper 0.14.32",

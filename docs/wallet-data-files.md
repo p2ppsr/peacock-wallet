@@ -20,7 +20,7 @@ Release qualification also requires native file-picker/save flows, interruption/
 
 ## Coordinated Toolbox upgrade
 
-The wallet consumes published Toolbox 2.14.0 and Message Box Client 2.5.3. [TS Stack #579](https://github.com/bsv-blockchain/ts-stack/pull/579) supplies basket membership/recovery corrections, send-max authorization, optional monitor subscription recovery and additive client/mobile exports. The lockfile pins the verified npm artifacts; file-format and signing-key boundaries remain unchanged.
+The wallet consumes published Toolbox 2.14.2 and Message Box Client 2.5.4. [TS Stack #579](https://github.com/bsv-blockchain/ts-stack/pull/579) supplies basket membership/recovery corrections, send-max authorization, optional monitor subscription recovery and additive client/mobile exports. The lockfile pins the verified npm artifacts; file-format and signing-key boundaries remain unchanged.
 
 ## SDK 2.8.5 integration
 
@@ -30,12 +30,24 @@ These are SDK compatibility repairs. No BRC100 application API, wire format or a
 
 SDK release evidence includes 7,393 passing SDK tests and an old/new signed-history matrix preserving all 32 previously valid response-byte cases; the eight known 2.8.1/2.8.2 negative-history failures are recorded separately. The dependency upgrade still requires this wallet's own checks and native acceptance before release; SDK evidence alone is not app acceptance.
 
-
 ## SDK 2.8.6 payment ownership correction
 
-This release pins the published SDK 2.8.6 package, including its recipient-side
+The earlier SDK 2.8.6 integration supplied the recipient-side
 BRC-29 child-key derivation correction (`forSelf: true`). Existing PeerPay
 acceptance and refund paths receive the correction through the dependency.
 BRC100 public APIs and encodings, stored permissions, account snapshots and
 BRC-38/39 archives are unchanged; no application or archive migration is needed.
 Prior-version native evidence above remains identified by its tested version.
+
+## SDK 2.8.7 and Toolbox 2.14.2 dependency qualification
+
+This release pins SDK 2.8.7, the platform-specific Wallet Toolbox 2.14.2
+package and Message Box Client 2.5.4 from verified protected npm artifacts.
+It corrects ordinary identity token/phrase binding and preserves binary
+createAction response accounting and BRC-29 payment/refund interoperability.
+Use a complete public-name/username token or named-field search;
+language-specific stemming remains an explicitly unsupported lookup case.
+BRC100 encodings, stored permissions, signing keys, account snapshots and
+BRC-38/39 files are unchanged. Previous native evidence above retains its
+tested version; this dependency release requires its own app checks and signed
+artifact acceptance. No data migration is needed.

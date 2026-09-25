@@ -135,3 +135,13 @@ Check wallet activity before repeating a creation that reported an error on an
 older version: the transaction may already have completed. The regression tests
 exercise completed and partial actions through the real binary codec without
 spending funds, and verify that denial still aborts before signing.
+
+### 0.9.5: identity lookup and wallet compatibility
+
+This release uses published SDK 2.8.7, Wallet Toolbox Client 2.14.2 and
+Message Box Client 2.5.4. It includes corrected identity lookup matching and
+retains the BRC-29 payment/refund and binary createAction response fixes.
+BRC100 calls, wallet permissions, account snapshots and BRC-38/39 recovery
+formats remain compatible; no application or account migration is required.
+Identity searches use complete public-name/username tokens or a named field;
+language-specific stemming remains unsupported.
