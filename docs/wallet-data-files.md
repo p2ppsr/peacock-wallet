@@ -29,3 +29,13 @@ The wallet pins published SDK 2.8.5, including the authenticated AES-GCM and bou
 These are SDK compatibility repairs. No BRC100 application API, wire format or account-data migration is required. Existing older clients retain their calls and wire bytes; applications that bundle an affected 2.8.x client can take the SDK patch without rewriting calls. This does not impose an ecosystem-wide SDK upgrade. Wallet provider installation and standard BRC100 responses must remain compatible with older clients.
 
 SDK release evidence includes 7,393 passing SDK tests and an old/new signed-history matrix preserving all 32 previously valid response-byte cases; the eight known 2.8.1/2.8.2 negative-history failures are recorded separately. The dependency upgrade still requires this wallet's own checks and native acceptance before release; SDK evidence alone is not app acceptance.
+
+
+## SDK 2.8.6 payment ownership correction
+
+This release pins the published SDK 2.8.6 package, including its recipient-side
+BRC-29 child-key derivation correction (`forSelf: true`). Existing PeerPay
+acceptance and refund paths receive the correction through the dependency.
+BRC100 public APIs and encodings, stored permissions, account snapshots and
+BRC-38/39 archives are unchanged; no application or archive migration is needed.
+Prior-version native evidence above remains identified by its tested version.

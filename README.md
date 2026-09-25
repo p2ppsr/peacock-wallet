@@ -117,3 +117,12 @@ This patch includes published `@bsv/sdk` 2.8.5, which increases HTTP client
 header capacity fourfold and allows valid larger payment proofs within the
 aggregate transport budget. BRC100 calls, wallet records, permissions and
 BRC-38/39 recovery formats remain unchanged. No account migration is needed.
+
+
+### 0.9.3: BRC-29 payment acceptance
+
+This patch uses published SDK 2.8.6 to derive the recipient-owned BRC-29 child
+key when accepting PeerPay payments and refunds. Valid payments are accepted
+without weakening wrong-recipient rejection. BRC100 calls, wallet records,
+permissions and BRC-38/39 recovery formats remain compatible; no account
+migration is required.
