@@ -101,7 +101,6 @@ Please file bugs with clear repro steps and platform info. For security-related 
 
 The license for the code in this repository is the Open BSV License.
 
-
 ### 0.9.1: existing wallet history compatibility
 
 This patch includes published `@bsv/sdk` 2.8.4. Existing action histories may
@@ -118,7 +117,6 @@ header capacity fourfold and allows valid larger payment proofs within the
 aggregate transport budget. BRC100 calls, wallet records, permissions and
 BRC-38/39 recovery formats remain unchanged. No account migration is needed.
 
-
 ### 0.9.3: BRC-29 payment acceptance
 
 This patch uses published SDK 2.8.6 to derive the recipient-owned BRC-29 child
@@ -126,3 +124,14 @@ key when accepting PeerPay payments and refunds. Valid payments are accepted
 without weakening wrong-recipient rejection. BRC100 calls, wallet records,
 permissions and BRC-38/39 recovery formats remain compatible; no account
 migration is required.
+
+### 0.9.4: binary createAction response compatibility
+
+This patch consumes Wallet Toolbox Client 2.14.1 so internal exact-spend
+metadata no longer causes an error after creating or signing an application
+transaction. Service charges and spending permissions remain enforced. BRC100
+apps, wallet data, BRC-38/39 files and account recovery require no migration.
+Check wallet activity before repeating a creation that reported an error on an
+older version: the transaction may already have completed. The regression tests
+exercise completed and partial actions through the real binary codec without
+spending funds, and verify that denial still aborts before signing.
