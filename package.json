@@ -1,7 +1,7 @@
 {
   "name": "user-wallet",
   "private": true,
-  "version": "0.9.5",
+  "version": "0.9.6",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -35,18 +35,21 @@
   },
   "dependencies": {
     "@bsv/message-box-client": "2.5.4",
-    "@bsv/sdk": "2.8.7",
-    "@bsv/wallet-toolbox-client": "2.14.2",
+    "@bsv/sdk": "2.8.10",
+    "@bsv/wallet-toolbox-client": "2.14.3",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^6.5.0",
     "@mui/material": "^6.5.0",
+    "@streamparser/json": "0.0.26",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "amountinator": "^0.2.12",
     "date-fns": "^4.1.0",
     "fuse.js": "^7.1.0",
+    "hash-wasm": "4.12.0",
+    "idb": "8.0.3",
     "jdenticon": "^3.3.0",
     "metanet-apps": "^1.1.1",
     "qrcode.react": "^3.1.0",
@@ -55,10 +58,7 @@
     "react-router-dom": "7.18.2",
     "react-toastify": "^11.0.3",
     "satoshi-shop-client": "^2.0.7",
-    "use-async-effect": "^2.2.7",
-    "@streamparser/json": "0.0.26",
-    "hash-wasm": "4.12.0",
-    "idb": "8.0.3"
+    "use-async-effect": "^2.2.7"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",
@@ -83,7 +83,7 @@
   },
   "overrides": {
     "satoshi-shop-client": {
-      "@bsv/sdk": "2.8.7"
+      "@bsv/sdk": "2.8.10"
     }
   }
 }
