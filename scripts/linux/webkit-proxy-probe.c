@@ -35,6 +35,7 @@ static gboolean bundled_helpers(void) {
     gchar *executable = g_file_read_link(link, NULL);
     g_free(link);
     if (executable && g_str_has_prefix(executable, appdir)) {
+      printf("bundled descendant=%s\n", executable);
       if (g_str_has_suffix(executable, "/WebKitNetworkProcess")) network = TRUE;
       if (g_str_has_suffix(executable, "/WebKitWebProcess")) renderer = TRUE;
     }
@@ -78,6 +79,7 @@ static gboolean load_failed(WebKitWebView *view, WebKitLoadEvent event, gchar *u
     puts("WebKit untrusted TLS certificate rejected");
     finish(bundled_helpers() ? 0 : 1);
   } else {
+    bundled_helpers();
     fprintf(stderr, "WebKit load failed: %s\n", error->message);
     finish(1);
   }

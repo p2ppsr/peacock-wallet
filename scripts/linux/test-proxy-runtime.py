@@ -97,6 +97,7 @@ with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
         environment["XDG_CURRENT_DESKTOP"] = "GNOME"
     environment.pop("APPDIR", None)
     if webkit:
+        environment["G_MESSAGES_DEBUG"] = "all"
         for variable in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
             environment[variable] = str(directory / variable.lower())
     # A bundled hook must override this host-module directory, including after extraction.
@@ -160,6 +161,7 @@ exec xvfb-run -a "$@"
                     subprocess.run(["sudo", "update-ca-certificates", "--fresh"], check=True, stdout=subprocess.DEVNULL)
             print(result.stdout, end="")
             if result.returncode:
+                print(f"{profile}: {mode}, {resolver or 'default'}, fixture CONNECTs={Proxy.connections}", flush=True)
                 if result.returncode == -11 and not webkit and shutil.which("gdb"):
                     app_run = pathlib.Path(sys.argv[1])
                     if app_run.suffix == ".AppImage":
