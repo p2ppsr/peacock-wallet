@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: linux-appimage-proxy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   bundle:
     runs-on: ubuntu-22.04
@@ -118,7 +122,7 @@ jobs:
       - name: Install display and host trust test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb dbus-x11 ca-certificates openssl python3 libgles2 glib-networking gsettings-desktop-schemas libproxy1-plugin-webkit
+          sudo apt-get install -y xvfb dbus-x11 ca-certificates openssl python3 libgles2 libegl1 libgl1-mesa-dri glib-networking gsettings-desktop-schemas libproxy1-plugin-webkit
       - uses: actions/download-artifact@v4
         with:
           name: wallet-runtime-fixture
