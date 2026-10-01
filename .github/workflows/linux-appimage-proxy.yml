@@ -1,0 +1,72 @@
+name: Linux AppImage proxy compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/linux/**'
+      - '.github/workflows/linux-appimage-proxy.yml'
+      - '.github/workflows/release.yml'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test packaging contracts
+        run: python3 scripts/linux/test-packaging.py
+      - name: Install fixture packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libsoup-3.0-dev librsvg2-dev libgirepository1.0-dev patchelf glib-networking libglib2.0-bin dconf-gsettings-backend
+      - name: Build harmless AppImage with release GTK/GIO plugin
+        run: bash scripts/linux/build-proxy-fixture.sh "$RUNNER_TEMP/proxy-fixture"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proxy-fixture
+          path: ${{ runner.temp }}/proxy-fixture/proxy-fixture.AppImage
+
+  extracted-runtime:
+    needs: bundle
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12', 'debian:13']
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install host runtimes and test tools
+        run: |
+          apt-get update
+          apt-get install -y ca-certificates python3 openssl libgtk-3-0 libgles2 glib-networking dconf-gsettings-backend
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: proxy-fixture
+          path: fixture
+      - name: Test extracted AppRun without FUSE
+        run: |
+          cd fixture
+          chmod +x proxy-fixture.AppImage
+          ./proxy-fixture.AppImage --appimage-extract > /dev/null
+          python3 ../scripts/linux/test-proxy-runtime.py "$PWD/squashfs-root/AppRun"
+
+  mounted-runtime:
+    needs: bundle
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FUSE runtime
+        run: sudo apt-get update && sudo apt-get install -y libfuse2
+      - uses: actions/download-artifact@v4
+        with:
+          name: proxy-fixture
+          path: fixture
+      - name: Test FUSE-mounted AppImage
+        run: |
+          chmod +x fixture/proxy-fixture.AppImage
+          python3 scripts/linux/test-proxy-runtime.py "$PWD/fixture/proxy-fixture.AppImage"

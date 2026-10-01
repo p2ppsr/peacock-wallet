@@ -85,7 +85,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf glib-networking libglib2.0-bin dconf-gsettings-backend
 
       - name: setup node
         uses: actions/setup-node@v4
@@ -108,6 +108,14 @@ jobs:
 
       - name: install frontend dependencies
         run: npm install
+
+      - name: Prepare compatible Linux AppImage GIO modules
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          set -euo pipefail
+          cache="$RUNNER_TEMP/peacock-appimage-cache"
+          bash scripts/linux/prepare-appimage-tools.sh "$cache/tauri"
+          echo "XDG_CACHE_HOME=$cache" >> "$GITHUB_ENV"
 
       - name: import Apple Developer Certificate
         if: matrix.platform == 'macos-latest'
@@ -170,37 +178,13 @@ jobs:
           args: ${{ matrix.args }}
 
       # === Linux AppImage Packaging and Signing ===
-      - name: Prepare AppDir for AppImage
+      - name: Reuse the Tauri AppImage for Linux downloads
         if: matrix.platform == 'ubuntu-22.04'
         run: |
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/128x128/apps
-          mkdir -p AppDir/usr/share/metainfo
-          cp src-tauri/target/release/user-wallet AppDir/usr/bin/
-          cp src-tauri/user-wallet.desktop AppDir/usr/share/applications/
-          cp src-tauri/app.user.wallet.metainfo.xml AppDir/usr/share/metainfo/
-          cp src-tauri/icons/128x128.png AppDir/usr/share/icons/hicolor/128x128/apps/user-wallet.png
-          # Set executable permissions
-          chmod +x AppDir/usr/bin/user-wallet
-
-      - name: Download linuxdeploy AppImage
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod +x linuxdeploy-x86_64.AppImage
-
-      - name: install appstreamcli
-        if: matrix.platform == 'ubuntu-22.04'
-        run: sudo apt-get install -y appstream
-
-      - name: Create AppImage
-        if: matrix.platform == 'ubuntu-22.04'
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: 1
-        run: |
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage --icon-file=AppDir/usr/share/icons/hicolor/128x128/apps/user-wallet.png --desktop-file=AppDir/usr/share/applications/user-wallet.desktop
-          mv Peacock_Wallet-x86_64.AppImage user-wallet-linux-x86_64.AppImage
+          set -euo pipefail
+          mapfile -t images < <(find src-tauri/target/release/bundle/appimage -maxdepth 1 -type f -name '*.AppImage')
+          test "${#images[@]}" -eq 1
+          cp "${images[0]}" user-wallet-linux-x86_64.AppImage
 
       - name: Import GPG Key for Linux Signing
         if: matrix.platform == 'ubuntu-22.04'
