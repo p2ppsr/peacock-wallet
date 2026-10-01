@@ -46,17 +46,36 @@ missing proxy module rejection, backend copying, paths containing spaces, and
 extracted AppRun initialization while preserving proxy/TLS/library variables.
 
 The `Linux AppImage proxy compatibility` workflow packages a small credential-free
-GIO/libsoup probe with the same GTK wrapper and retained Tauri AppRun. It tests
+GIO probe with the same GTK wrapper and retained Tauri AppRun. It tests
 extracted execution on Ubuntu 22.04/24.04 and Debian 12/13, plus FUSE-mounted
 execution on Ubuntu 22.04. A loopback CONNECT fixture is the only route to its
 HTTPS origin. Both the default resolver and explicitly selected libproxy must
 use it. An untrusted test certificate must fail; supplying its test CA must
 produce HTTP 200. There are no external requests, wallet unlocks, or transactions.
 
-This fixture does not exercise an actual WebKit subprocess, desktop proxy/PAC
-settings, NetworkManager, or a production host's CA store. Validate those with a
-fresh signed wallet artifact before release. A macOS source review and portable
-tests alone cannot establish Linux runtime compatibility.
+An additional job builds the complete unsigned wallet AppImage, extracts it into
+a disposable directory, and replaces only that scratch copy's wallet executable
+with an ephemeral WebKit probe. The probe requires its own bundled network and
+renderer helper processes, HTTP 200, and the rendered fixture body. It retains
+WebKit's default proxy and TLS policy. On a disposable Ubuntu 22.04 runner, the
+fixture first rejects a private CA, installs only that temporary CA in the normal
+host trust store, rejects a hostname mismatch, accepts the matching host, and
+removes the CA. The wallet executable, credentials, storage, and transactions are
+never used. Private D-Bus sessions and temporary XDG directories isolate GNOME
+manual/PAC settings; loopback exclusions must avoid CONNECT requests.
+
+Early diagnostic probes using Ubuntu 22.04 libsoup 3.0.7 crashed during the
+private-certificate CONNECT test with both untouched host and bundled libraries,
+including async I/O. The direct GIO probe isolates module compatibility; it does
+not explain or waive that HTTP-engine crash. The complete AppImage WebKit job
+remains a release gate. Its passing result must be observed, not inferred from
+the lower-level probe.
+
+NetworkManager, KDE-specific backends, custom host GIO modules, and signed-artifact
+verification remain separate qualification concerns. A macOS source review and
+portable tests alone cannot establish Linux runtime compatibility. Confirm the
+actual runtime jobs, supported distribution checks, platform builds, signatures,
+and updater payloads before publishing a release.
 
 Source references: [Tauri 2.11.4 bundler](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.11.4/crates/tauri-bundler/src/bundle/linux/appimage/linuxdeploy.rs),
 [pinned GTK plugin](https://github.com/tauri-apps/linuxdeploy-plugin-gtk/blob/dda522bce37387f1b853d9095713bfaa924c8423/linuxdeploy-plugin-gtk.sh),

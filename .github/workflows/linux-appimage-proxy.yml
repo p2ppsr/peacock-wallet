@@ -109,12 +109,16 @@ jobs:
   wallet-webkit-runtime:
     needs: wallet-appimage
     runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ['environment', 'gnome-manual', 'gnome-pac']
     steps:
       - uses: actions/checkout@v4
       - name: Install display and host trust test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb dbus-x11 ca-certificates openssl python3 libgles2
+          sudo apt-get install -y xvfb dbus-x11 ca-certificates openssl python3 libgles2 glib-networking gsettings-desktop-schemas libproxy1-plugin-webkit
       - uses: actions/download-artifact@v4
         with:
           name: wallet-runtime-fixture
@@ -133,4 +137,4 @@ jobs:
           # Only the scratch extraction changes; no wallet executable is run.
           cp "$probe" squashfs-root/usr/bin/user-wallet
           chmod +x squashfs-root/usr/bin/user-wallet
-          python3 ../scripts/linux/test-proxy-runtime.py "$PWD/squashfs-root/AppRun" --webkit-host-ca
+          python3 ../scripts/linux/test-proxy-runtime.py "$PWD/squashfs-root/AppRun" --webkit-host-ca '${{ matrix.profile }}'

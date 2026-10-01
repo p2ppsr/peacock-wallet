@@ -17,8 +17,16 @@ import threading
 class Health(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
+        if self.path == "/proxy.pac":
+            self.send_header("Content-Type", "application/x-ns-proxy-autoconfig")
         self.end_headers()
-        self.wfile.write(b"fixture healthy\n")
+        if self.path == "/proxy.pac":
+            self.wfile.write(("function FindProxyForURL(url, host) { "
+                             "if (host === 'localhost' || host === '127.0.0.1') return 'DIRECT'; "
+                             f"return 'PROXY 127.0.0.1:{proxy.server_address[1]}'; "
+                             "}").encode())
+        else:
+            self.wfile.write(b"fixture healthy\n")
 
     def log_message(self, *_args):
         pass
@@ -61,6 +69,9 @@ class Proxy(socketserver.StreamRequestHandler):
 
 with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
     webkit = len(sys.argv) > 2 and sys.argv[2] == "--webkit-host-ca"
+    profile = sys.argv[3] if len(sys.argv) > 3 else "environment"
+    if profile not in ("environment", "gnome-manual", "gnome-pac"):
+        raise ValueError("Unknown proxy fixture profile")
     directory = pathlib.Path(temporary)
     certificate = directory / "fixture.pem"
     key = directory / "fixture.key"
@@ -74,12 +85,16 @@ with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
     context.load_cert_chain(certificate, key)
     https.socket = context.wrap_socket(https.socket, server_side=True)
     proxy = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Proxy)
+    local_http = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Health)
     proxy.daemon_threads = True
-    for server in (https, proxy):
+    for server in (https, proxy, local_http):
         threading.Thread(target=server.serve_forever, daemon=True).start()
     proxy_url = f"http://127.0.0.1:{proxy.server_address[1]}"
     environment = {key: value for key, value in os.environ.items() if "proxy" not in key.lower()}
-    environment.update(https_proxy=proxy_url, HTTPS_PROXY=proxy_url, no_proxy="", NO_PROXY="")
+    if profile == "environment":
+        environment.update(https_proxy=proxy_url, HTTPS_PROXY=proxy_url, no_proxy="", NO_PROXY="")
+    else:
+        environment["XDG_CURRENT_DESKTOP"] = "GNOME"
     environment.pop("APPDIR", None)
     if webkit:
         for variable in ("XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
@@ -88,20 +103,37 @@ with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
     environment["GIO_MODULE_DIR"] = "/usr/lib/x86_64-linux-gnu/gio/modules"
     environment["GIO_EXTRA_MODULES"] = environment["GIO_MODULE_DIR"]
     # Keep the default resolver test, then require the libproxy chain implicated in #37.
-    for resolver in (None, "libproxy"):
+    for resolver in ((None, "libproxy") if profile == "environment" else (None,)):
         environment.pop("GIO_USE_PROXY_RESOLVER", None)
         if resolver:
             environment["GIO_USE_PROXY_RESOLVER"] = resolver
         for mode in ("reject", "accept"):
-            trust_file = "/usr/local/share/ca-certificates/peacock-ci-fixture.crt"
-            if webkit and mode == "accept":
-                subprocess.run(["sudo", "install", "-m", "644", str(certificate), trust_file], check=True)
-                subprocess.run(["sudo", "update-ca-certificates"], check=True, stdout=subprocess.DEVNULL)
+            trust_file = f"/usr/local/share/ca-certificates/{directory.name}.crt"
             command = [sys.argv[1], "https://peacock-proxy.invalid/healthz", str(certificate), proxy_url, mode]
             if webkit:
-                command = ["dbus-run-session", "--", "xvfb-run", "-a"] + command
+                if profile == "environment":
+                    command = ["dbus-run-session", "--", "xvfb-run", "-a"] + command
+                else:
+                    settings = '''set -e
+gsettings set org.gnome.system.proxy mode "$1"
+gsettings set org.gnome.system.proxy autoconfig-url "$2"
+gsettings set org.gnome.system.proxy ignore-hosts "['localhost', '127.0.0.1']"
+gsettings set org.gnome.system.proxy use-same-proxy false
+gsettings set org.gnome.system.proxy.http host 127.0.0.1
+gsettings set org.gnome.system.proxy.http port "$3"
+gsettings set org.gnome.system.proxy.https host 127.0.0.1
+gsettings set org.gnome.system.proxy.https port "$3"
+shift 3
+exec xvfb-run -a "$@"
+'''
+                    command = ["dbus-run-session", "--", "bash", "-c", settings, "desktop-fixture",
+                               "auto" if profile == "gnome-pac" else "manual",
+                               f"http://127.0.0.1:{local_http.server_address[1]}/proxy.pac",
+                               str(proxy.server_address[1])] + command
             try:
                 if webkit and mode == "accept":
+                    subprocess.run(["sudo", "install", "-m", "644", str(certificate), trust_file], check=True)
+                    subprocess.run(["sudo", "update-ca-certificates"], check=True, stdout=subprocess.DEVNULL)
                     wrong_host = command.copy()
                     wrong_host[-4] = "https://wrong-host.invalid/healthz"
                     wrong_host[-1] = "reject"
@@ -109,6 +141,18 @@ with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
                     print(mismatch.stdout, end="")
                     if mismatch.returncode:
                         raise RuntimeError("Trusted certificate hostname mismatch was not rejected: " + mismatch.stderr)
+                    bypass = command.copy()
+                    bypass[-4] = f"http://127.0.0.1:{local_http.server_address[1]}/healthz"
+                    bypass[-2] = "direct://"
+                    connections = Proxy.connections
+                    bypass_environment = environment.copy()
+                    if profile == "environment":
+                        bypass_environment.update(http_proxy=proxy_url, HTTP_PROXY=proxy_url,
+                                                  no_proxy="127.0.0.1", NO_PROXY="127.0.0.1")
+                    direct = subprocess.run(bypass, env=bypass_environment, timeout=35, capture_output=True, text=True)
+                    print(direct.stdout, end="")
+                    if direct.returncode or Proxy.connections != connections:
+                        raise RuntimeError("Loopback exclusion did not stay direct: " + direct.stderr)
                 result = subprocess.run(command, env=environment, timeout=35, capture_output=True, text=True)
             finally:
                 if webkit and mode == "accept":
@@ -136,7 +180,8 @@ exec gdb --batch -ex run -ex 'thread apply all bt' -ex 'info sharedlibrary' --ar
                 raise RuntimeError("Bundled libproxy resolver did not load")
             if "Failed to load module" in result.stderr or "undefined symbol" in result.stderr:
                 raise RuntimeError("GIO module ABI failure: " + result.stderr)
-    if Proxy.connections < 4:
+    if Proxy.connections < (4 if profile == "environment" else 2):
         raise RuntimeError("HTTPS requests did not traverse the proxy")
     proxy.shutdown()
     https.shutdown()
+    local_http.shutdown()

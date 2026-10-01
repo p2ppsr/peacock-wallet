@@ -3,6 +3,24 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
+
+static gboolean descendant(long pid) {
+  for (int depth = 0; pid > 1 && depth < 64; depth++) {
+    if (pid == getpid()) return TRUE;
+    gchar *path = g_strdup_printf("/proc/%ld/stat", pid);
+    gchar *stat = NULL;
+    gboolean read = g_file_get_contents(path, &stat, NULL, NULL);
+    g_free(path);
+    gchar *end = read ? strrchr(stat, ')') : NULL;
+    long parent = 0;
+    gboolean found = end && sscanf(end + 2, "%*c %ld", &parent) == 1;
+    g_free(stat);
+    if (!found || parent == pid) return FALSE;
+    pid = parent;
+  }
+  return FALSE;
+}
 
 static gboolean bundled_helpers(void) {
   const char *appdir = getenv("APPDIR");
@@ -12,6 +30,7 @@ static gboolean bundled_helpers(void) {
   if (!appdir || !processes) return FALSE;
   while ((entry = g_dir_read_name(processes))) {
     if (!g_ascii_isdigit(entry[0])) continue;
+    if (!descendant(strtol(entry, NULL, 10))) continue;
     gchar *link = g_strdup_printf("/proc/%s/exe", entry);
     gchar *executable = g_file_read_link(link, NULL);
     g_free(link);
@@ -99,6 +118,13 @@ int main(int argc, char **argv) {
   /* The CA argument is intentionally unused: this probe exercises host trust. */
   if (!gtk_init_check(NULL, NULL)) return 1;
   printf("resolver=%s\n", G_OBJECT_TYPE_NAME(g_proxy_resolver_get_default()));
+  GError *error = NULL;
+  gchar **routes = g_proxy_resolver_lookup(g_proxy_resolver_get_default(), argv[1], NULL, &error);
+  if (error || !routes || g_strcmp0(routes[0], argv[3]) != 0) {
+    fprintf(stderr, "WebKit host resolver did not select the expected route\n");
+    return 1;
+  }
+  g_strfreev(routes);
   WebKitWebContext *context = webkit_web_context_new_ephemeral();
   WebKitWebView *view = WEBKIT_WEB_VIEW(webkit_web_view_new_with_context(context));
   GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
