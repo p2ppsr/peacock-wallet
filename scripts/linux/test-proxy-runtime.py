@@ -126,7 +126,7 @@ with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
 export APPDIR="$1"
 shift
 for hook in "$APPDIR"/apprun-hooks/*; do source "$hook"; done
-exec gdb --batch -ex run -ex 'thread apply all bt' --args "$APPDIR/AppRun.wrapped" "$@"
+exec gdb --batch -ex run -ex 'thread apply all bt' -ex 'info sharedlibrary' --args "$APPDIR/AppRun.wrapped" "$@"
 '''
                     debug = subprocess.run(["bash", "-c", debug_script, "probe-debug", str(app_run.parent)] + command[-4:],
                                            env=environment, timeout=45, capture_output=True, text=True)
