@@ -15,3 +15,4 @@ echo "7804c9eef13e59bf2783aad9882ef9db8f3f3f9e8d631874b1d348d550a3693f  $downloa
 install -m 755 "$download" "$tools/peacock-upstream-gtk.sh"
 install -m 755 "$source_dir/linuxdeploy-plugin-gtk.sh" "$tools/linuxdeploy-plugin-gtk.sh"
 install -m 755 "$source_dir/bundle-gio.sh" "$tools/peacock-bundle-gio.sh"
+bash "$source_dir/build-libsoup-compat.sh" "$tools/libsoup-compat"

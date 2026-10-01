@@ -85,7 +85,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf glib-networking libglib2.0-bin dconf-gsettings-backend
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf glib-networking libglib2.0-bin dconf-gsettings-backend meson ninja-build libbrotli-dev libpsl-dev libkrb5-dev libsqlite3-dev libnghttp2-dev libsysprof-4-dev winbind
 
       - name: setup node
         uses: actions/setup-node@v4

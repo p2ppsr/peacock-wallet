@@ -7,4 +7,4 @@ if [[ ${1:-} != --appdir || $# != 2 ]]; then
   exec bash "$tools/peacock-upstream-gtk.sh" "$@"
 fi
 bash "$tools/peacock-upstream-gtk.sh" "$@"
-bash "$tools/peacock-bundle-gio.sh" "$2"
+bash "$tools/peacock-bundle-gio.sh" "$2" "$tools/libsoup-compat"

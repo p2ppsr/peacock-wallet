@@ -23,10 +23,29 @@ the Tauri AppImage for the canonical Linux download before signing and hashing.
 The versioned artifact, direct download, and updater payload therefore use the
 same packaging path. Existing signing and updater verification stay in place.
 
+Runtime qualification also exposed Ubuntu 22.04's libsoup 3.0.7 default HTTP proxy
+bug. A controlled rebuild of the same source reproduced a WebKit network-process
+crash with a null connection; adding only upstream
+[commit 2696fc8](https://github.com/GNOME/libsoup/commit/2696fc8ddfd9237f8844452c6f8a12f6a612b97a)
+passed environment, GNOME manual/PAC, trusted CA, hostname rejection, and exclusion
+checks. The fix leaves HTTP proxy handshaking to libsoup instead of also letting
+GIO perform it. This is distinct from the module ABI failure reported in #37.
+
+The build backports that single fix to the checksum-verified Ubuntu
+`3.0.7-0ubuntu1` source, retaining its distribution patches, hardening flags, and
+runtime GSSAPI/NTLM/Brotli/sysprof features. It replaces only the bundled libsoup;
+no host library is installed or changed. A changed Ubuntu package version stops
+the build for review, preventing this backport from overwriting future security
+updates. The AppImage includes the complete upstream/Ubuntu source archives,
+patch, build recipe, and LGPL license under
+`usr/share/doc/peacock-libsoup-compat`.
+
 ## Local Linux builds
 
 Install the normal Tauri dependencies plus `glib-networking`, `libglib2.0-bin`,
-and `dconf-gsettings-backend` on the Ubuntu 22.04 builder. Before building:
+`dconf-gsettings-backend`, `meson`, `ninja-build`, `libbrotli-dev`, `libpsl-dev`,
+`libkrb5-dev`, `libsqlite3-dev`, `libnghttp2-dev`, `libsysprof-4-dev`, and `winbind`
+on the Ubuntu 22.04 builder. Before building:
 
 ```sh
 export XDG_CACHE_HOME="$(mktemp -d)"
@@ -44,6 +63,7 @@ build baseline remains Ubuntu 22.04; raising it can raise the glibc requirement.
 `python3 scripts/linux/test-packaging.py` runs portable contract checks, including
 missing proxy module rejection, backend copying, paths containing spaces, and
 extracted AppRun initialization while preserving proxy/TLS/library variables.
+It also requires the compatibility library and its source/license files.
 
 The `Linux AppImage proxy compatibility` workflow packages a small credential-free
 GIO probe with the same GTK wrapper and retained Tauri AppRun. It tests
@@ -64,12 +84,13 @@ removes the CA. The wallet executable, credentials, storage, and transactions ar
 never used. Private D-Bus sessions and temporary XDG directories isolate GNOME
 manual/PAC settings; loopback exclusions must avoid CONNECT requests.
 
-Early diagnostic probes using Ubuntu 22.04 libsoup 3.0.7 crashed during the
-private-certificate CONNECT test with both untouched host and bundled libraries,
-including async I/O. The direct GIO probe isolates module compatibility; it does
-not explain or waive that HTTP-engine crash. The complete AppImage WebKit job
-remains a release gate. Its passing result must be observed, not inferred from
-the lower-level probe.
+The independent libsoup control requires the unpatched source to reproduce the
+network-process SIGSEGV with the expected library mapped. The patched source must
+pass every policy case, and the network process must map that patched library.
+This control explains the observed HTTP-engine failure; it does not qualify the
+complete AppImage. The actual bundled WebKit job remains a release gate, and its
+passing result must be observed separately from the control and lower-level GIO
+probe.
 
 NetworkManager, KDE-specific backends, custom host GIO modules, and signed-artifact
 verification remain separate qualification concerns. A macOS source review and

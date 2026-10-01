@@ -21,6 +21,12 @@ class Packaging(unittest.TestCase):
         self.modules.mkdir(parents=True)
         self.bin.mkdir()
         self.appdir.mkdir()
+        self.compat = self.root / "libsoup compatibility"
+        (self.compat / "prefix/lib").mkdir(parents=True)
+        (self.compat / "prefix/lib/libsoup-3.0.so.0").write_text("inert patched library")
+        for name in ("libsoup3_3.0.7.orig.tar.xz", "libsoup3_3.0.7-0ubuntu1.debian.tar.xz",
+                     "default-proxy.patch", "source-build.sh", "COPYING"):
+            (self.compat / name).write_text("inert source offer " + name)
         for name in ("libgiolibproxy.so", "libgiognutls.so", "libdconfsettings.so"):
             (self.modules / name).write_text("inert fixture " + name)
         backend = self.libdir / "libproxy/0.4.17/modules"
@@ -40,7 +46,7 @@ class Packaging(unittest.TestCase):
         file.chmod(0o755)
 
     def bundle(self):
-        return subprocess.run(["bash", str(SOURCE / "bundle-gio.sh"), str(self.appdir)],
+        return subprocess.run(["bash", str(SOURCE / "bundle-gio.sh"), str(self.appdir), str(self.compat)],
                               env=self.environment, capture_output=True, text=True)
 
     def test_modules_and_dynamic_backends_are_bundled(self):
@@ -50,6 +56,8 @@ class Packaging(unittest.TestCase):
         self.assertEqual((bundled / "libgiolibproxy.so").read_bytes(), (self.modules / "libgiolibproxy.so").read_bytes())
         self.assertTrue((bundled / "giomodule.cache").is_file())
         self.assertTrue((self.appdir / "usr/lib/peacock-libproxy/config_gnome3.so").is_file())
+        self.assertEqual((self.appdir / "usr/lib/libsoup-3.0.so.0").read_text(), "inert patched library")
+        self.assertTrue((self.appdir / "usr/share/doc/peacock-libsoup-compat/COPYING").is_file())
         calls = (self.root / "calls").read_text()
         self.assertIn("--appdir=", calls)
         self.assertEqual(calls.count("--set-rpath $ORIGIN/.."), 4)
@@ -61,6 +69,13 @@ class Packaging(unittest.TestCase):
         self.assertIn("Required GIO module missing: libgiolibproxy.so", result.stderr)
         self.assertFalse((self.root / "calls").exists())
         self.assertFalse((self.appdir / "apprun-hooks/00-peacock-gio.sh").exists())
+
+    def test_missing_proxy_compatibility_library_fails_before_deployment(self):
+        (self.compat / "prefix/lib/libsoup-3.0.so.0").unlink()
+        result = self.bundle()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Required libsoup proxy compatibility build missing", result.stderr)
+        self.assertFalse((self.root / "calls").exists())
 
     def test_extracted_hook_sets_appdir_and_preserves_network_policy(self):
         self.assertEqual(self.bundle().returncode, 0)
