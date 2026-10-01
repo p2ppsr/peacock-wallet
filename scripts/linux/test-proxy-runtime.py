@@ -34,6 +34,8 @@ class Health(http.server.BaseHTTPRequestHandler):
 
 class Proxy(socketserver.StreamRequestHandler):
     connections = 0
+    # Header parsing hands the socket to the raw tunnel; retain no buffered bytes.
+    rbufsize = 0
 
     def handle(self):
         # Only tunnel the fixture authority to our loopback TLS server.
@@ -91,6 +93,12 @@ with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
         threading.Thread(target=server.serve_forever, daemon=True).start()
     proxy_url = f"http://127.0.0.1:{proxy.server_address[1]}"
     environment = {key: value for key, value in os.environ.items() if "proxy" not in key.lower()}
+    if webkit:
+        # Crash diagnostics must not inherit unrelated CI tokens or application state.
+        environment = {key: value for key, value in environment.items()
+                       if key in ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "XDG_RUNTIME_DIR")}
+        environment["HOME"] = str(directory / "home")
+        pathlib.Path(environment["HOME"]).mkdir()
     if profile == "environment":
         environment.update(https_proxy=proxy_url, HTTPS_PROXY=proxy_url, no_proxy="", NO_PROXY="")
     else:
@@ -103,6 +111,39 @@ with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
     # A bundled hook must override this host-module directory, including after extraction.
     environment["GIO_MODULE_DIR"] = "/usr/lib/x86_64-linux-gnu/gio/modules"
     environment["GIO_EXTRA_MODULES"] = environment["GIO_MODULE_DIR"]
+    failures = []
+
+    def run_probe(command, probe_environment, label):
+        """Run every policy case, retaining all failures as a strict final gate."""
+        try:
+            result = subprocess.run(command, env=probe_environment, timeout=35, capture_output=True, text=True)
+        except subprocess.TimeoutExpired:
+            failures.append(f"{label}: timed out")
+            return
+        print(result.stdout, result.stderr, sep="", end="", flush=True)
+        print(f"{label}: exit={result.returncode}, fixture CONNECTs={Proxy.connections}", flush=True)
+        if result.returncode:
+            failures.append(f"{label}: probe exit {result.returncode}")
+        if resolver and "resolver=GLibproxyResolver" not in result.stdout:
+            failures.append(f"{label}: bundled libproxy resolver did not load")
+        if "Failed to load module" in result.stderr or "undefined symbol" in result.stderr:
+            failures.append(f"{label}: GIO module ABI failure")
+        if result.returncode == -11 and not webkit and shutil.which("gdb"):
+            app_run = pathlib.Path(sys.argv[1])
+            if app_run.suffix == ".AppImage":
+                subprocess.run([str(app_run), "--appimage-extract"], cwd=directory,
+                               check=True, stdout=subprocess.DEVNULL)
+                app_run = directory / "squashfs-root/AppRun"
+            debug_script = '''set -e
+export APPDIR="$1"
+shift
+for hook in "$APPDIR"/apprun-hooks/*; do source "$hook"; done
+exec gdb --batch -ex run -ex 'thread apply all bt' -ex 'info sharedlibrary' --args "$APPDIR/AppRun.wrapped" "$@"
+'''
+            debug = subprocess.run(["bash", "-c", debug_script, "probe-debug", str(app_run.parent)] + command[-4:],
+                                   env=probe_environment, timeout=45, capture_output=True, text=True)
+            print(debug.stdout, debug.stderr, flush=True)
+
     # Keep the default resolver test, then require the libproxy chain implicated in #37.
     for resolver in ((None, "libproxy") if profile == "environment" else (None,)):
         environment.pop("GIO_USE_PROXY_RESOLVER", None)
@@ -138,10 +179,7 @@ exec xvfb-run -a "$@"
                     wrong_host = command.copy()
                     wrong_host[-4] = "https://wrong-host.invalid/healthz"
                     wrong_host[-1] = "reject"
-                    mismatch = subprocess.run(wrong_host, env=environment, timeout=35, capture_output=True, text=True)
-                    print(mismatch.stdout, end="")
-                    if mismatch.returncode:
-                        raise RuntimeError("Trusted certificate hostname mismatch was not rejected: " + mismatch.stderr)
+                    run_probe(wrong_host, environment, f"{profile}/{resolver or 'default'}/hostname-reject")
                     bypass = command.copy()
                     bypass[-4] = f"http://127.0.0.1:{local_http.server_address[1]}/healthz"
                     bypass[-2] = "direct://"
@@ -150,40 +188,18 @@ exec xvfb-run -a "$@"
                     if profile == "environment":
                         bypass_environment.update(http_proxy=proxy_url, HTTP_PROXY=proxy_url,
                                                   no_proxy="127.0.0.1", NO_PROXY="127.0.0.1")
-                    direct = subprocess.run(bypass, env=bypass_environment, timeout=35, capture_output=True, text=True)
-                    print(direct.stdout, end="")
-                    if direct.returncode or Proxy.connections != connections:
-                        raise RuntimeError("Loopback exclusion did not stay direct: " + direct.stderr)
-                result = subprocess.run(command, env=environment, timeout=35, capture_output=True, text=True)
+                    run_probe(bypass, bypass_environment, f"{profile}/{resolver or 'default'}/bypass")
+                    if Proxy.connections != connections:
+                        failures.append("Loopback exclusion did not stay direct")
+                run_probe(command, environment, f"{profile}/{resolver or 'default'}/{mode}")
             finally:
                 if webkit and mode == "accept":
                     subprocess.run(["sudo", "rm", "-f", trust_file], check=True)
                     subprocess.run(["sudo", "update-ca-certificates", "--fresh"], check=True, stdout=subprocess.DEVNULL)
-            print(result.stdout, end="")
-            if result.returncode:
-                print(f"{profile}: {mode}, {resolver or 'default'}, fixture CONNECTs={Proxy.connections}", flush=True)
-                if result.returncode == -11 and not webkit and shutil.which("gdb"):
-                    app_run = pathlib.Path(sys.argv[1])
-                    if app_run.suffix == ".AppImage":
-                        subprocess.run([str(app_run), "--appimage-extract"], cwd=directory,
-                                       check=True, stdout=subprocess.DEVNULL)
-                        app_run = directory / "squashfs-root/AppRun"
-                    debug_script = '''set -e
-export APPDIR="$1"
-shift
-for hook in "$APPDIR"/apprun-hooks/*; do source "$hook"; done
-exec gdb --batch -ex run -ex 'thread apply all bt' -ex 'info sharedlibrary' --args "$APPDIR/AppRun.wrapped" "$@"
-'''
-                    debug = subprocess.run(["bash", "-c", debug_script, "probe-debug", str(app_run.parent)] + command[-4:],
-                                           env=environment, timeout=45, capture_output=True, text=True)
-                    print(debug.stdout, debug.stderr, flush=True)
-                raise RuntimeError(f"AppImage probe exit {result.returncode} ({mode}, {resolver or 'default'}): " + result.stderr)
-            if resolver and "resolver=GLibproxyResolver" not in result.stdout:
-                raise RuntimeError("Bundled libproxy resolver did not load")
-            if "Failed to load module" in result.stderr or "undefined symbol" in result.stderr:
-                raise RuntimeError("GIO module ABI failure: " + result.stderr)
     if Proxy.connections < (4 if profile == "environment" else 2):
         raise RuntimeError("HTTPS requests did not traverse the proxy")
     proxy.shutdown()
     https.shutdown()
     local_http.shutdown()
+    if failures:
+        raise RuntimeError("Proxy qualification failed: " + "; ".join(failures))
