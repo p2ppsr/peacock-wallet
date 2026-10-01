@@ -11,7 +11,7 @@ int main(int argc, char **argv) {
   printf("resolver=%s\n", G_OBJECT_TYPE_NAME(resolver));
   gchar **routes = g_proxy_resolver_lookup(resolver, argv[1], NULL, &error);
   if (error || !routes || g_strcmp0(routes[0], argv[3]) != 0) {
-    fprintf(stderr, "Configured proxy was not selected\n");
+    fprintf(stderr, "Configured proxy was not selected: %s (%s)\n", routes ? routes[0] : "none", error ? error->message : "no lookup error");
     return 1;
   }
   g_strfreev(routes);
@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
   GBytes *response = soup_session_send_and_read(session, message, NULL, &error);
   if (reject) {
     if (response || !g_error_matches(error, G_TLS_ERROR, G_TLS_ERROR_BAD_CERTIFICATE)) {
-      fprintf(stderr, "Untrusted TLS certificate was not rejected\n");
+      fprintf(stderr, "Untrusted TLS certificate was not rejected: %s\n", error ? error->message : "no TLS error");
       return 1;
     }
     puts("untrusted TLS certificate rejected");

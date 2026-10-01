@@ -80,8 +80,10 @@ with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
         for mode in ("reject", "accept"):
             result = subprocess.run([
                 sys.argv[1], "https://peacock-proxy.invalid/healthz", str(certificate), proxy_url, mode,
-            ], env=environment, check=True, timeout=30, capture_output=True, text=True)
+            ], env=environment, timeout=30, capture_output=True, text=True)
             print(result.stdout, end="")
+            if result.returncode:
+                raise RuntimeError(f"AppImage probe failed ({mode}, {resolver or 'default'}): " + result.stderr)
             if resolver and "resolver=GLibproxyResolver" not in result.stdout:
                 raise RuntimeError("Bundled libproxy resolver did not load")
             if "Failed to load module" in result.stderr or "undefined symbol" in result.stderr:
