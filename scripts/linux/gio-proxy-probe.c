@@ -4,6 +4,18 @@
 #include <string.h>
 #include <signal.h>
 
+typedef struct {
+  GMainLoop *loop;
+  GBytes *response;
+  GError *error;
+} Request;
+
+static void received(GObject *session, GAsyncResult *result, gpointer data) {
+  Request *request = data;
+  request->response = soup_session_send_and_read_finish(SOUP_SESSION(session), result, &request->error);
+  g_main_loop_quit(request->loop);
+}
+
 /* Only the local CI fixture is contacted; this executable never loads wallet code. */
 int main(int argc, char **argv) {
   if (argc != 5) return 2;
@@ -28,7 +40,14 @@ int main(int argc, char **argv) {
     g_object_unref(database);
   }
   SoupMessage *message = soup_message_new("GET", argv[1]);
-  GBytes *response = soup_session_send_and_read(session, message, NULL, &error);
+  /* WebKit uses async I/O. Ubuntu 22.04's libsoup 3.0.7 also crashes in the
+     synchronous CONNECT/bad-certificate path with untouched host libraries. */
+  Request request = { .loop = g_main_loop_new(NULL, FALSE) };
+  soup_session_send_and_read_async(session, message, G_PRIORITY_DEFAULT, NULL, received, &request);
+  g_main_loop_run(request.loop);
+  g_main_loop_unref(request.loop);
+  GBytes *response = request.response;
+  error = request.error;
   if (reject) {
     if (response || !g_error_matches(error, G_TLS_ERROR, G_TLS_ERROR_BAD_CERTIFICATE)) {
       fprintf(stderr, "Untrusted TLS certificate was not rejected: %s\n", error ? error->message : "no TLS error");
