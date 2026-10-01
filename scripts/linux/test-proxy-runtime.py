@@ -31,7 +31,7 @@ class Proxy(socketserver.StreamRequestHandler):
         # Only tunnel the fixture authority to our loopback TLS server.
         request = self.rfile.readline().split()
         if (len(request) != 3 or request[0] != b"CONNECT"
-                or request[1] not in (b"peacock-proxy.invalid:443", b"peacock-proxy.invalid", b"wrong-host.invalid:443")
+                or request[1] not in (b"peacock-proxy.invalid:443", b"peacock-proxy.invalid", b"wrong-host.invalid:443", b"wrong-host.invalid")
                 or request[2] not in (b"HTTP/1.0", b"HTTP/1.1")):
             print("Rejected fixture CONNECT request:", request, flush=True)
             return

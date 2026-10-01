@@ -28,9 +28,12 @@ static gboolean bundled_helpers(void) {
 
 static gboolean reject;
 static gboolean tls_failed;
+static gboolean finished;
 static int outcome = 1;
 
 static void finish(int status) {
+  if (finished) return;
+  finished = TRUE;
   outcome = status;
   gtk_main_quit();
 }
@@ -80,7 +83,7 @@ static void evaluated(GObject *view, GAsyncResult *result, gpointer unused) {
 static void loaded(WebKitWebView *view, WebKitLoadEvent event, gpointer unused) {
   (void)unused;
   if (event != WEBKIT_LOAD_FINISHED) return;
-  if (reject) { finish(tls_failed ? 0 : 1); return; }
+  if (reject) { finish(tls_failed && bundled_helpers() ? 0 : 1); return; }
   WebKitWebResource *resource = webkit_web_view_get_main_resource(view);
   WebKitURIResponse *response = resource ? webkit_web_resource_get_response(resource) : NULL;
   if (!response || webkit_uri_response_get_status_code(response) != 200) { finish(1); return; }
