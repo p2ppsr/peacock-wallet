@@ -1,22 +1,22 @@
 {
   "platforms": {
     "linux-x86_64": {
-      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.9.6/user-wallet-updater-linux-x86_64.AppImage",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINW1uZTljWFg4SXZsV2phU0lpRGVib0hEWE41Zm9kaXgyQ2pXNXdTbGVDVFd5UWQxaHZRNHkxVjFxZ2llOW8wbENGN3JBUUQ5azcySmI3NzVKcDg4YWdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwNjEyMjk5CWZpbGU6UGVhY29jayBXYWxsZXRfMC45LjZfYW1kNjQuQXBwSW1hZ2UKeVh3WEZRMzU2T1hqSzRoWFVDK0NKaUVld3lvckN6WjJ0cE9ORmNPSExuN0hhR2pOcmhINEpZOHpHNkZvcVZVcGxVTnRhUkpPWTlsZWE5MlhKVE8yQmc9PQo="
+      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.9.7/user-wallet-updater-linux-x86_64.AppImage",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINWhKdnUzY3k3UlU5ell0dDloUGhXQ2VwRmFaNzNUSFgrRUtGRmdjN1YwbjZMcEh2NlJUOHFmRU1PY3pHZ3lNdUwvTUlqNTVPYndEZnZINHBUcjRaVGdNPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk4MjEzCWZpbGU6UGVhY29jayBXYWxsZXRfMC45LjdfYW1kNjQuQXBwSW1hZ2UKaTFqMFR3TjZZY3pCYUZxdzE5bWRuaXhzeGYxdXVXMlB1aE52TjhvUjIydUI5bkxodG5sRjJBZGlTdUxSbnl4dXJ4TStWeXFBRVI1VnZOL2RwK2h3RFE9PQo="
     },
     "darwin-aarch64": {
-      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.9.6/user-wallet-updater-darwin-aarch64.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINW5oQy9DdXpwbE9lZCtSSnM1a1lXMm0zeitwV2pIZW5nNC9ESmMzL25QOVc1WktqcVJ5dld2MWhpQWxBLzR4SHV6MmRiYmpTTE94b0xVQlRQNVZVN0FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwNjEyMDkyCWZpbGU6UGVhY29jayBXYWxsZXQuYXBwLnRhci5negpaQ3ZyeGlWTnFWaERkSlByNm85bExoc2g1MXFzVGFlRTczNDRUdlplcGxDc05sT0xBSHJ3VnRBaTlnRm5TRXNRZWplL2szRXJueSs5dEx5REtJdDNBZz09Cg=="
+      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.9.7/user-wallet-updater-darwin-aarch64.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINXFmZGlKSTFkSHBiRlJxcUdacHN0SmROclUycnJXbS90WkUrU2VVSkVvNDFVU1FaUzFHd1FrL1ZrcHQ5TUdxOU82L25tZVI1aG1nMCtqOUY2SkNndFFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk3ODg3CWZpbGU6UGVhY29jayBXYWxsZXQuYXBwLnRhci5negp0N085Q1hSbXpZekp4cDBXd3A0Njl4bmovblNNaWZtRTJWUURFMGxGVlNpOTlvYWsxWHJHWlBJeFRISng3NWJ1Nm8vL1l2T21IMGFxTEg4NFk4bWZEUT09Cg=="
     },
     "darwin-x86_64": {
-      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.9.6/user-wallet-updater-darwin-x86_64.tar.gz",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINWtjQTNPcTEyekFudFp5M0tBUWhjdGdmVGJTbG4vNC9KS0d1V2U4RXplUUorbTB0RnJpbWRQbUo3aDgwaEU0aGc3RGswaG9KWlJEVDV4TjZqUkxjOGdrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwNjExODkxCWZpbGU6UGVhY29jayBXYWxsZXQuYXBwLnRhci5nego3eDBqYTFaNGI2cFdCWXlqR2swS2F5QmYreE9pK3R2cTFVZTlqWlVGbWxIM0VqcGxUVXNvQjd0VjBuWm9WTGsyeFlYWGVaUFA0amNuMWdaeFV4amdCUT09Cg=="
+      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.9.7/user-wallet-updater-darwin-x86_64.tar.gz",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINWxBdlo0RE5ISW9acFAzT3VReGhiQktsaU1TQkNQeVptZ3BvZlBZdzZPYS9xU0tCZEc0Njg4MS84NHE4WklGZVhsV0o5ck9ZQXYrU2JuS05vcm15dFFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk3ODEzCWZpbGU6UGVhY29jayBXYWxsZXQuYXBwLnRhci5negpSSThwVjArSHVBeWdpU0JWYjFUYjFGN3hlRlJ2S2ZMUURGWFpuVnZYUm4xMFpRQ2NMeHRmVDNPUDlzTlNET25BRXNLbTNaOFhLUnpnL1BHeVNIVTRDQT09Cg=="
     },
     "windows-x86_64": {
-      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.9.6/user-wallet-updater-windows-x86_64.exe",
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINW9zUjFWcm5laGQ0cm16ckNzYTBFNlltSXhGM1ZHYXlvemo3RWpsTk5Db083MS9jYXFlNExVZ3hsV1h0Y3YrMnFvSlhqL3FWK09TUTEzbmt5Mkx4QVE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwNjExOTA4CWZpbGU6UGVhY29jayBXYWxsZXRfMC45LjZfeDY0LXNldHVwLmV4ZQpwRmN1TC94ZmQxeUN1SFE1ZXpzTHh4VHhiK2RyK0ZncU5Ccm5SQzdDcjRNN3JVS0FjK2FLM3pVdFl1Wm9kZmxtNmN4WGlLbmFpK2s0UzRXcSt6dEZCdz09Cg=="
+      "url": "https://github.com/p2ppsr/peacock-wallet/releases/download/v0.9.7/user-wallet-updater-windows-x86_64.exe",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTMVJmMW9RTDBINW5OYXI5dkZSVFVBRWJTWkg3VFVOMC9RUFZ1M2hvWXpmOUpHYTR4NVBydXppQ1RoaGIwalVXd0M0bHJJT3VHVktPQnNuNzcxbG9pcTN0ZGRTWjhIdkFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwODk3OTUyCWZpbGU6UGVhY29jayBXYWxsZXRfMC45LjdfeDY0LXNldHVwLmV4ZQpOTlBJYm8xcGtNaGpGT2M2cWJ4RlQrTjZ4aVRqZEU3d0FzQk9qbTEwZk1vQ0p4YTg5MGV0c2lGNlUzOTVVR3BpQytIb1VHU1d6Y3FBYWphUzVlUWpEQT09Cg=="
     }
   },
-  "version": "0.9.6",
-  "pub_date": "2026-09-28T16:19:23Z"
+  "version": "0.9.7",
+  "pub_date": "2026-10-01T23:43:53Z"
 }
