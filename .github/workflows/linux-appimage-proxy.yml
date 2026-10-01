@@ -1,0 +1,206 @@
+name: Linux AppImage proxy compatibility
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/linux/**'
+      - '.github/workflows/linux-appimage-proxy.yml'
+      - '.github/workflows/release.yml'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-appimage-proxy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  libsoup-default-proxy-control:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host WebKit and source comparison tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev xvfb dbus-x11 ca-certificates openssl python3 meson ninja-build libbrotli-dev libpsl-dev libkrb5-dev libsqlite3-dev libnghttp2-dev winbind glib-networking gsettings-desktop-schemas libproxy1-plugin-webkit gdb
+      - name: Compare exact upstream default-proxy fix with unchanged libsoup
+        run: |
+          set -euo pipefail
+          control="$RUNNER_TEMP/libsoup-control"
+          mkdir -p "$control"
+          read -r -a flags <<< "$(pkg-config --cflags --libs webkit2gtk-4.1)"
+          cc scripts/linux/webkit-proxy-probe.c -o "$control/webkit-proxy-probe" "${flags[@]}"
+          for variant in upstream fixed; do
+            bash scripts/linux/build-libsoup-control.sh "$control" "$variant"
+            readelf -n "$control/$variant/prefix/lib/libsoup-3.0.so.0" | sed -n '/Build ID/p'
+            cat > "$control/$variant/probe" <<'PROBE'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          location=$(cd -- "$(dirname -- "$0")" && pwd)
+          export APPDIR=/usr
+          # Only this diagnostic process selects the compared library.
+          export LD_LIBRARY_PATH="$location/prefix/lib"
+          exec "$location/../webkit-proxy-probe" "$@"
+          PROBE
+            chmod +x "$control/$variant/probe"
+          done
+          sudo sysctl -w "kernel.core_pattern=$RUNNER_TEMP/control-core.%e.%P"
+          ulimit -c unlimited
+          if python3 scripts/linux/test-proxy-runtime.py "$control/upstream/probe" --webkit-host-ca environment > "$control/upstream.log" 2>&1; then
+            cat "$control/upstream.log"
+            echo 'Unchanged libsoup unexpectedly passed; re-evaluate the proposed cause.' >&2
+            exit 1
+          fi
+          cat "$control/upstream.log"
+          grep -F 'environment/default/accept: exit=1' "$control/upstream.log"
+          grep -F 'environment/default/bypass: exit=0' "$control/upstream.log"
+          while IFS= read -r -d '' core; do
+            gdb --batch -ex 'thread apply all bt' -ex 'info sharedlibrary' \
+              /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess "$core"
+          done < <(find "$RUNNER_TEMP" -maxdepth 1 -name 'control-core.WebKitNetworkPr.*' -type f -print0) > "$control/upstream-crash.log" 2>&1
+          cat "$control/upstream-crash.log"
+          grep -F 'Program terminated with signal SIGSEGV' "$control/upstream-crash.log"
+          grep -F "$control/upstream/prefix/lib/libsoup-3.0.so" "$control/upstream-crash.log"
+          for profile in environment gnome-manual gnome-pac; do
+            python3 scripts/linux/test-proxy-runtime.py "$control/fixed/probe" --webkit-host-ca "$profile" | tee "$control/$profile.log"
+            grep -F "network-libsoup-library=$control/fixed/prefix/lib/libsoup-3.0.so" "$control/$profile.log"
+          done
+
+  bundle:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test packaging contracts
+        run: python3 scripts/linux/test-packaging.py
+      - name: Install fixture packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libsoup-3.0-dev librsvg2-dev libgirepository1.0-dev patchelf glib-networking libglib2.0-bin dconf-gsettings-backend meson ninja-build libbrotli-dev libpsl-dev libkrb5-dev libsqlite3-dev libnghttp2-dev libsysprof-4-dev winbind
+      - name: Build harmless AppImage with release GTK/GIO plugin
+        run: |
+          read -r -a flags <<< "$(pkg-config --cflags --libs gio-2.0)"
+          cc -g scripts/linux/gio-proxy-probe.c -o "$RUNNER_TEMP/host-proxy-probe" "${flags[@]}"
+          python3 scripts/linux/test-proxy-runtime.py "$RUNNER_TEMP/host-proxy-probe"
+          bash scripts/linux/build-proxy-fixture.sh "$RUNNER_TEMP/proxy-fixture"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: proxy-fixture
+          path: ${{ runner.temp }}/proxy-fixture/proxy-fixture.AppImage
+
+  extracted-runtime:
+    needs: bundle
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12', 'debian:13']
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install host runtimes and test tools
+        run: |
+          apt-get update
+          apt-get install -y ca-certificates python3 openssl libgtk-3-0 libgles2 glib-networking dconf-gsettings-backend gdb
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: proxy-fixture
+          path: fixture
+      - name: Test extracted AppRun without FUSE
+        run: |
+          cd fixture
+          chmod +x proxy-fixture.AppImage
+          ./proxy-fixture.AppImage --appimage-extract > /dev/null
+          python3 ../scripts/linux/test-proxy-runtime.py "$PWD/squashfs-root/AppRun"
+
+  mounted-runtime:
+    needs: bundle
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FUSE runtime
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 gdb
+      - uses: actions/download-artifact@v4
+        with:
+          name: proxy-fixture
+          path: fixture
+      - name: Test FUSE-mounted AppImage
+        run: |
+          chmod +x fixture/proxy-fixture.AppImage
+          python3 scripts/linux/test-proxy-runtime.py "$PWD/fixture/proxy-fixture.AppImage"
+
+  wallet-appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Install wallet build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf glib-networking libglib2.0-bin dconf-gsettings-backend meson ninja-build libbrotli-dev libpsl-dev libkrb5-dev libsqlite3-dev libnghttp2-dev libsysprof-4-dev winbind
+      - run: npm ci
+      - name: Build unsigned wallet AppImage for runtime qualification
+        run: |
+          export XDG_CACHE_HOME="$RUNNER_TEMP/peacock-appimage-cache"
+          bash scripts/linux/prepare-appimage-tools.sh "$XDG_CACHE_HOME/tauri"
+          npm run tauri build -- --bundles appimage --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          read -r -a flags <<< "$(pkg-config --cflags --libs webkit2gtk-4.1)"
+          cc scripts/linux/webkit-proxy-probe.c -o webkit-proxy-probe "${flags[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallet-runtime-fixture
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            webkit-proxy-probe
+
+  wallet-webkit-runtime:
+    needs: wallet-appimage
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: ['environment', 'gnome-manual', 'gnome-pac']
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install display and host trust test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb dbus-x11 ca-certificates openssl python3 libgles2 libegl1 libgl1-mesa-dri glib-networking gsettings-desktop-schemas libproxy1-plugin-webkit gdb
+      - uses: actions/download-artifact@v4
+        with:
+          name: wallet-runtime-fixture
+          path: fixture
+      - name: Test bundled WebKit helpers with default proxy and host CA trust
+        run: |
+          set -euo pipefail
+          mapfile -t images < <(find fixture -type f -name '*.AppImage')
+          test "${#images[@]}" -eq 1
+          image="$(realpath "${images[0]}")"
+          mkdir scratch-runtime
+          cd scratch-runtime
+          chmod +x "$image"
+          "$image" --appimage-extract > /dev/null
+          probe="$(find ../fixture -type f -name webkit-proxy-probe)"
+          # Only the scratch extraction changes; no wallet executable is run.
+          cp "$probe" squashfs-root/usr/bin/user-wallet
+          chmod +x squashfs-root/usr/bin/user-wallet
+          # Capture only this disposable credential-free runner's process crashes.
+          sudo sysctl -w "kernel.core_pattern=$RUNNER_TEMP/peacock-core.%e.%P"
+          ulimit -c unlimited
+          python3 ../scripts/linux/test-proxy-runtime.py "$PWD/squashfs-root/AppRun" --webkit-host-ca '${{ matrix.profile }}'
+      - name: Diagnose credential-free WebKit crashes
+        if: failure()
+        run: |
+          readelf -n scratch-runtime/squashfs-root/usr/lib/libsoup-3.0.so.0 | sed -n '/Build ID/p'
+          while IFS= read -r -d '' core; do
+            gdb --batch -ex 'thread apply all bt' -ex 'info registers rax rdx rdi rbp' -ex 'info sharedlibrary' \
+              scratch-runtime/squashfs-root/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess "$core"
+          done < <(find "$RUNNER_TEMP" -maxdepth 1 -name 'peacock-core.WebKitNetworkPr.*' -type f -print0)

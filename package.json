@@ -1,7 +1,7 @@
 {
   "name": "user-wallet",
   "private": true,
-  "version": "0.9.6",
+  "version": "0.9.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -35,8 +35,8 @@
   },
   "dependencies": {
     "@bsv/message-box-client": "2.5.4",
-    "@bsv/sdk": "2.8.10",
-    "@bsv/wallet-toolbox-client": "2.14.3",
+    "@bsv/sdk": "2.8.11",
+    "@bsv/wallet-toolbox-client": "2.14.4",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^6.5.0",
@@ -83,7 +83,7 @@
   },
   "overrides": {
     "satoshi-shop-client": {
-      "@bsv/sdk": "2.8.10"
+      "@bsv/sdk": "2.8.11"
     }
   }
 }
