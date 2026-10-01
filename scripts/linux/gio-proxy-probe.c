@@ -1,19 +1,13 @@
 #include <gio/gio.h>
-#include <libsoup/soup.h>
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
 
-typedef struct {
-  GMainLoop *loop;
-  GBytes *response;
-  GError *error;
-} Request;
-
-static void received(GObject *session, GAsyncResult *result, gpointer data) {
-  Request *request = data;
-  request->response = soup_session_send_and_read_finish(SOUP_SESSION(session), result, &request->error);
-  g_main_loop_quit(request->loop);
+static void configure_test_ca(GSocketClient *client, GSocketClientEvent event,
+                              GSocketConnectable *target, GIOStream *stream, gpointer database) {
+  (void)client; (void)target;
+  if (event == G_SOCKET_CLIENT_TLS_HANDSHAKING)
+    g_tls_connection_set_database(G_TLS_CONNECTION(stream), G_TLS_DATABASE(database));
 }
 
 /* Only the local CI fixture is contacted; this executable never loads wallet code. */
@@ -31,39 +25,45 @@ int main(int argc, char **argv) {
   }
   g_strfreev(routes);
 
-  SoupSession *session = soup_session_new_with_options("timeout", 10, NULL);
+  GSocketClient *client = g_socket_client_new();
+  g_socket_client_set_timeout(client, 10);
+  g_socket_client_set_tls(client, TRUE);
   gboolean reject = strcmp(argv[4], "reject") == 0;
+  GTlsDatabase *database = NULL;
   if (!reject) {
-    GTlsDatabase *database = g_tls_file_database_new(argv[2], &error);
+    database = g_tls_file_database_new(argv[2], &error);
     if (error || !database) return 1;
-    soup_session_set_tls_database(session, database);
-    g_object_unref(database);
+    g_signal_connect(client, "event", G_CALLBACK(configure_test_ca), database);
   }
-  SoupMessage *message = soup_message_new("GET", argv[1]);
-  /* WebKit uses async I/O. Ubuntu 22.04's libsoup 3.0.7 also crashes in the
-     synchronous CONNECT/bad-certificate path with untouched host libraries. */
-  Request request = { .loop = g_main_loop_new(NULL, FALSE) };
-  soup_session_send_and_read_async(session, message, G_PRIORITY_DEFAULT, NULL, received, &request);
-  g_main_loop_run(request.loop);
-  g_main_loop_unref(request.loop);
-  GBytes *response = request.response;
-  error = request.error;
+  /* Exercise GIO proxy negotiation and normal TLS verification directly.
+     The separate full-AppImage WebKit test qualifies the HTTP engine. */
+  GSocketConnection *connection = g_socket_client_connect_to_uri(client, argv[1], 443, NULL, &error);
   if (reject) {
-    if (response || !g_error_matches(error, G_TLS_ERROR, G_TLS_ERROR_BAD_CERTIFICATE)) {
+    if (connection || !g_error_matches(error, G_TLS_ERROR, G_TLS_ERROR_BAD_CERTIFICATE)) {
       fprintf(stderr, "Untrusted TLS certificate was not rejected: %s\n", error ? error->message : "no TLS error");
       return 1;
     }
     puts("untrusted TLS certificate rejected");
   } else {
-    if (error || !response || soup_message_get_status(message) != 200) {
-      fprintf(stderr, "Trusted HTTPS request failed: %s\n", error ? error->message : "non-200 status");
+    if (error || !connection) {
+      fprintf(stderr, "Trusted HTTPS connection failed: %s\n", error ? error->message : "no connection");
       return 1;
     }
+    const gchar request[] = "GET /healthz HTTP/1.1\r\nHost: peacock-proxy.invalid\r\nConnection: close\r\n\r\n";
+    GOutputStream *output = g_io_stream_get_output_stream(G_IO_STREAM(connection));
+    if (!g_output_stream_write_all(output, request, strlen(request), NULL, NULL, &error)) return 1;
+    GDataInputStream *input = g_data_input_stream_new(g_io_stream_get_input_stream(G_IO_STREAM(connection)));
+    gchar *status = g_data_input_stream_read_line(input, NULL, NULL, &error);
+    gboolean healthy = !error && status &&
+      (g_str_has_prefix(status, "HTTP/1.0 200 ") || g_str_has_prefix(status, "HTTP/1.1 200 "));
+    g_free(status);
+    g_object_unref(input);
+    if (!healthy) { fprintf(stderr, "Trusted HTTPS request did not return 200\n"); return 1; }
     puts("proxied HTTPS status=200");
   }
   g_clear_error(&error);
-  if (response) g_bytes_unref(response);
-  g_object_unref(message);
-  g_object_unref(session);
+  if (connection) g_object_unref(connection);
+  if (database) g_object_unref(database);
+  g_object_unref(client);
   return 0;
 }

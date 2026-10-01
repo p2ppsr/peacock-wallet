@@ -10,7 +10,7 @@ curl --fail --location --silent --show-error \
 chmod +x "$tools/linuxdeploy-x86_64.AppImage"
 appdir="$output/ProxyFixture.AppDir"
 mkdir -p "$appdir/usr/bin" "$appdir/usr/share/applications"
-read -r -a compiler_flags <<< "$(pkg-config --cflags --libs gio-2.0 libsoup-3.0)"
+read -r -a compiler_flags <<< "$(pkg-config --cflags --libs gio-2.0)"
 cc -g "$source_dir/gio-proxy-probe.c" -o "$appdir/usr/bin/proxy-fixture" "${compiler_flags[@]}"
 # Exercise the same retained AppRun and GTK hook discovery used by Tauri.
 curl --fail --location --silent --show-error \
