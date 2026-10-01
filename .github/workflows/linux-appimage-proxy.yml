@@ -17,6 +17,57 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  libsoup-default-proxy-control:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host WebKit and source comparison tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev xvfb dbus-x11 ca-certificates openssl python3 meson ninja-build libbrotli-dev libpsl-dev libkrb5-dev libsqlite3-dev libnghttp2-dev winbind glib-networking gsettings-desktop-schemas libproxy1-plugin-webkit gdb
+      - name: Compare exact upstream default-proxy fix with unchanged libsoup
+        run: |
+          set -euo pipefail
+          control="$RUNNER_TEMP/libsoup-control"
+          mkdir -p "$control"
+          read -r -a flags <<< "$(pkg-config --cflags --libs webkit2gtk-4.1)"
+          cc scripts/linux/webkit-proxy-probe.c -o "$control/webkit-proxy-probe" "${flags[@]}"
+          for variant in upstream fixed; do
+            bash scripts/linux/build-libsoup-control.sh "$control" "$variant"
+            readelf -n "$control/$variant/prefix/lib/libsoup-3.0.so.0" | sed -n '/Build ID/p'
+            cat > "$control/$variant/probe" <<'PROBE'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          location=$(cd -- "$(dirname -- "$0")" && pwd)
+          export APPDIR=/usr
+          # Only this diagnostic process selects the compared library.
+          export LD_LIBRARY_PATH="$location/prefix/lib"
+          exec "$location/../webkit-proxy-probe" "$@"
+          PROBE
+            chmod +x "$control/$variant/probe"
+          done
+          sudo sysctl -w "kernel.core_pattern=$RUNNER_TEMP/control-core.%e.%P"
+          ulimit -c unlimited
+          if python3 scripts/linux/test-proxy-runtime.py "$control/upstream/probe" --webkit-host-ca environment > "$control/upstream.log" 2>&1; then
+            cat "$control/upstream.log"
+            echo 'Unchanged libsoup unexpectedly passed; re-evaluate the proposed cause.' >&2
+            exit 1
+          fi
+          cat "$control/upstream.log"
+          grep -F 'environment/default/accept: exit=1' "$control/upstream.log"
+          grep -F 'environment/default/bypass: exit=0' "$control/upstream.log"
+          while IFS= read -r -d '' core; do
+            gdb --batch -ex 'thread apply all bt' -ex 'info sharedlibrary' \
+              /usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess "$core"
+          done < <(find "$RUNNER_TEMP" -maxdepth 1 -name 'control-core.WebKitNetworkPr.*' -type f -print0) > "$control/upstream-crash.log" 2>&1
+          cat "$control/upstream-crash.log"
+          grep -F 'Program terminated with signal SIGSEGV' "$control/upstream-crash.log"
+          grep -F "$control/upstream/prefix/lib/libsoup-3.0.so" "$control/upstream-crash.log"
+          for profile in environment gnome-manual gnome-pac; do
+            python3 scripts/linux/test-proxy-runtime.py "$control/fixed/probe" --webkit-host-ca "$profile" | tee "$control/$profile.log"
+            grep -F "network-libsoup-library=$control/fixed/prefix/lib/libsoup-3.0.so" "$control/$profile.log"
+          done
+
   bundle:
     runs-on: ubuntu-22.04
     steps:
@@ -142,13 +193,14 @@ jobs:
           cp "$probe" squashfs-root/usr/bin/user-wallet
           chmod +x squashfs-root/usr/bin/user-wallet
           # Capture only this disposable credential-free runner's process crashes.
-          sudo sysctl -w "kernel.core_pattern=$RUNNER_TEMP/peacock-core.%e.%p"
+          sudo sysctl -w "kernel.core_pattern=$RUNNER_TEMP/peacock-core.%e.%P"
           ulimit -c unlimited
           python3 ../scripts/linux/test-proxy-runtime.py "$PWD/squashfs-root/AppRun" --webkit-host-ca '${{ matrix.profile }}'
       - name: Diagnose credential-free WebKit crashes
         if: failure()
         run: |
+          readelf -n scratch-runtime/squashfs-root/usr/lib/libsoup-3.0.so.0 | sed -n '/Build ID/p'
           while IFS= read -r -d '' core; do
-            gdb --batch -ex 'thread apply all bt' -ex 'info sharedlibrary' \
+            gdb --batch -ex 'thread apply all bt' -ex 'info registers rax rdx rdi rbp' -ex 'info sharedlibrary' \
               scratch-runtime/squashfs-root/usr/lib/x86_64-linux-gnu/webkit2gtk-4.1/WebKitNetworkProcess "$core"
-          done < <(find "$RUNNER_TEMP" -maxdepth 1 -name 'peacock-core.*' -type f -print0)
+          done < <(find "$RUNNER_TEMP" -maxdepth 1 -name 'peacock-core.WebKitNetworkPr.*' -type f -print0)

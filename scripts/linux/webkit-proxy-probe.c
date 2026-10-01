@@ -1,4 +1,6 @@
+#define _GNU_SOURCE
 #include <webkit2/webkit2.h>
+#include <dlfcn.h>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -36,7 +38,23 @@ static gboolean bundled_helpers(void) {
     g_free(link);
     if (executable && g_str_has_prefix(executable, appdir)) {
       printf("bundled descendant=%s\n", executable);
-      if (g_str_has_suffix(executable, "/WebKitNetworkProcess")) network = TRUE;
+      if (g_str_has_suffix(executable, "/WebKitNetworkProcess")) {
+        network = TRUE;
+        gchar *maps_path = g_strdup_printf("/proc/%s/maps", entry);
+        gchar *maps = NULL;
+        if (g_file_get_contents(maps_path, &maps, NULL, NULL)) {
+          gchar **lines = g_strsplit(maps, "\n", -1);
+          for (int i = 0; lines[i]; i++) {
+            if (strstr(lines[i], "/libsoup-3.0.so.")) {
+              printf("network-libsoup-library=%s\n", strchr(lines[i], '/'));
+              break;
+            }
+          }
+          g_strfreev(lines);
+        }
+        g_free(maps);
+        g_free(maps_path);
+      }
       if (g_str_has_suffix(executable, "/WebKitWebProcess")) renderer = TRUE;
     }
     g_free(executable);
@@ -119,6 +137,10 @@ int main(int argc, char **argv) {
   reject = strcmp(argv[4], "reject") == 0;
   /* The CA argument is intentionally unused: this probe exercises host trust. */
   if (!gtk_init_check(NULL, NULL)) return 1;
+  Dl_info library;
+  void *soup_version = dlsym(RTLD_DEFAULT, "soup_get_major_version");
+  if (soup_version && dladdr(soup_version, &library))
+    printf("libsoup-library=%s\n", library.dli_fname);
   printf("resolver=%s\n", G_OBJECT_TYPE_NAME(g_proxy_resolver_get_default()));
   GError *error = NULL;
   gchar **routes = g_proxy_resolver_lookup(g_proxy_resolver_get_default(), argv[1], NULL, &error);
