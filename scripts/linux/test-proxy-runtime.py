@@ -46,10 +46,16 @@ class Proxy(socketserver.StreamRequestHandler):
                 if not ready:
                     return
                 for peer in ready:
-                    data = peer.recv(65536)
+                    try:
+                        data = peer.recv(65536)
+                    except ConnectionResetError:
+                        return
                     if not data:
                         return
-                    peers[1 if peer is peers[0] else 0].sendall(data)
+                    try:
+                        peers[1 if peer is peers[0] else 0].sendall(data)
+                    except (BrokenPipeError, ConnectionResetError):
+                        return
 
 
 with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
@@ -87,7 +93,7 @@ with tempfile.TemporaryDirectory(prefix="peacock-proxy-") as temporary:
             ], env=environment, timeout=30, capture_output=True, text=True)
             print(result.stdout, end="")
             if result.returncode:
-                raise RuntimeError(f"AppImage probe failed ({mode}, {resolver or 'default'}): " + result.stderr)
+                raise RuntimeError(f"AppImage probe exit {result.returncode} ({mode}, {resolver or 'default'}): " + result.stderr)
             if resolver and "resolver=GLibproxyResolver" not in result.stdout:
                 raise RuntimeError("Bundled libproxy resolver did not load")
             if "Failed to load module" in result.stderr or "undefined symbol" in result.stderr:

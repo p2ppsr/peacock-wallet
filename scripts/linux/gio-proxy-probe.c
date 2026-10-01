@@ -2,10 +2,13 @@
 #include <libsoup/soup.h>
 #include <stdio.h>
 #include <string.h>
+#include <signal.h>
 
 /* Only the local CI fixture is contacted; this executable never loads wallet code. */
 int main(int argc, char **argv) {
   if (argc != 5) return 2;
+  signal(SIGPIPE, SIG_IGN);
+  setvbuf(stdout, NULL, _IONBF, 0);
   GError *error = NULL;
   GProxyResolver *resolver = g_proxy_resolver_get_default();
   printf("resolver=%s\n", G_OBJECT_TYPE_NAME(resolver));
