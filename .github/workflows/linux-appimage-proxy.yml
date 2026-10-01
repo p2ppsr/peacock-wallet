@@ -42,7 +42,7 @@ jobs:
       - name: Install host runtimes and test tools
         run: |
           apt-get update
-          apt-get install -y ca-certificates python3 openssl libgtk-3-0 libgles2 glib-networking dconf-gsettings-backend
+          apt-get install -y ca-certificates python3 openssl libgtk-3-0 libgles2 glib-networking dconf-gsettings-backend gdb
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
@@ -61,7 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install FUSE runtime
-        run: sudo apt-get update && sudo apt-get install -y libfuse2
+        run: sudo apt-get update && sudo apt-get install -y libfuse2 gdb
       - uses: actions/download-artifact@v4
         with:
           name: proxy-fixture
@@ -70,3 +70,63 @@ jobs:
         run: |
           chmod +x fixture/proxy-fixture.AppImage
           python3 scripts/linux/test-proxy-runtime.py "$PWD/fixture/proxy-fixture.AppImage"
+
+  wallet-appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Install wallet build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf glib-networking libglib2.0-bin dconf-gsettings-backend
+      - run: npm ci
+      - name: Build unsigned wallet AppImage for runtime qualification
+        run: |
+          export XDG_CACHE_HOME="$RUNNER_TEMP/peacock-appimage-cache"
+          bash scripts/linux/prepare-appimage-tools.sh "$XDG_CACHE_HOME/tauri"
+          npm run tauri build -- --bundles appimage --config '{"bundle":{"createUpdaterArtifacts":false}}'
+          read -r -a flags <<< "$(pkg-config --cflags --libs webkit2gtk-4.1)"
+          cc scripts/linux/webkit-proxy-probe.c -o webkit-proxy-probe "${flags[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallet-runtime-fixture
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            webkit-proxy-probe
+
+  wallet-webkit-runtime:
+    needs: wallet-appimage
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install display and host trust test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb dbus-x11 ca-certificates openssl python3 libgles2
+      - uses: actions/download-artifact@v4
+        with:
+          name: wallet-runtime-fixture
+          path: fixture
+      - name: Test bundled WebKit helpers with default proxy and host CA trust
+        run: |
+          set -euo pipefail
+          mapfile -t images < <(find fixture -type f -name '*.AppImage')
+          test "${#images[@]}" -eq 1
+          image="$(realpath "${images[0]}")"
+          mkdir scratch-runtime
+          cd scratch-runtime
+          chmod +x "$image"
+          "$image" --appimage-extract > /dev/null
+          probe="$(find ../fixture -type f -name webkit-proxy-probe)"
+          # Only the scratch extraction changes; no wallet executable is run.
+          cp "$probe" squashfs-root/usr/bin/user-wallet
+          chmod +x squashfs-root/usr/bin/user-wallet
+          python3 ../scripts/linux/test-proxy-runtime.py "$PWD/squashfs-root/AppRun" --webkit-host-ca
