@@ -145,3 +145,15 @@ BRC100 calls, wallet permissions, account snapshots and BRC-38/39 recovery
 formats remain compatible; no application or account migration is required.
 Identity searches use complete public-name/username tokens or a named field;
 language-specific stemming remains unsupported.
+
+## UMP and faucet release 0.9.8
+
+This candidate pins Toolbox Client 2.14.6, SDK 3.1.0 and Message Box Client
+2.6.0. It includes confirmed UMP update lineage and pin continuity, plus
+locally authorized storage fee outputs for faucet redemption. Providers need
+Overlay 2.6.4 or later together with a retained-history lookup selector.
+The refresh preserves wallet data and BRC100 interfaces. The lock also uses
+source-map-js 1.2.2 to repair its high-severity indexed source-map advisory
+without changing its existing compatible range. The existing release workflow
+publishes signed installers after source, security and native validation. Mainnet and TerraTestNet frontend configurations
+are checked separately before release.
