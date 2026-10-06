@@ -55,6 +55,8 @@ jobs:
           echo "should_release=true" >> "$GITHUB_OUTPUT"
 
   publish-tauri:
+    # Bound signing/notarization on an ephemeral hosted runner.
+    timeout-minutes: 120
     needs: prepare-release
     if: needs.prepare-release.outputs.should_release == 'true'
     permissions:
@@ -128,7 +130,8 @@ jobs:
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security set-keychain-settings -t 3600 -u build.keychain
+          # Notarization can exceed one hour; retain unlock for the full two-hour job.
+          security set-keychain-settings -t 10800 -u build.keychain
           security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
           security find-identity -v -p codesigning build.keychain
@@ -176,6 +179,25 @@ jobs:
           prerelease: false
           uploadUpdaterJson: false
           args: ${{ matrix.args }}
+
+      - name: Verify macOS signatures and stapled notarization
+        if: matrix.platform == 'macos-latest'
+        run: |
+          set -euo pipefail
+          target="${{ matrix.artifact_suffix == 'macos-arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin' }}"
+          arch="${{ matrix.artifact_suffix == 'macos-arm64' && 'aarch64' || 'x64' }}"
+          product="$(node -p "require('./src-tauri/tauri.conf.json').productName")"
+          version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          bundle_root="src-tauri/target/$target/release/bundle"
+          app="$bundle_root/macos/$product.app"
+          dmg="$bundle_root/dmg/${product}_${version}_${arch}.dmg"
+          test -d "$app"
+          test -f "$dmg"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")" = "$version"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+          codesign --verify --strict --verbose=2 "$dmg"
 
       # === Linux AppImage Packaging and Signing ===
       - name: Reuse the Tauri AppImage for Linux downloads
@@ -618,6 +640,14 @@ jobs:
         with:
           name: binaries-${{ matrix.artifact_suffix }}
           path: release-uploads
+
+      - name: Delete temporary macOS signing material
+        if: always() && matrix.platform == 'macos-latest'
+        run: |
+          if [[ -e "$HOME/Library/Keychains/build.keychain-db" || -e "$HOME/Library/Keychains/build.keychain" ]]; then
+            security delete-keychain build.keychain
+          fi
+          rm -f certificate.p12
 
   package-binaries-site:
     name: package-binaries-site
