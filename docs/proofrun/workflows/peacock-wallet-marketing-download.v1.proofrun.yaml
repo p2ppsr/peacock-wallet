@@ -3,7 +3,7 @@ kind: Workflow
 metadata:
   id: peacock-wallet-marketing-download
   name: Peacock Wallet marketing-to-download conversion
-  version: 1.0.0
+  version: 1.0.1
   description: Desktop users looking for a transparent identity and payments wallet.
   labels:
     migration: proofrunVersion-1
@@ -150,6 +150,9 @@ policy:
   highImpactActions: deny
   allowedHosts:
     - userwallet.getmetanet.com
+    - github.com
+    - objects.githubusercontent.com
+    - release-assets.githubusercontent.com
   spendLimit: 0
   warnExitCode: 0
 remediation:
