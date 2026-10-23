@@ -92,7 +92,7 @@ jobs:
       - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 24.22.1
 
       - name: Check release version sync
         if: startsWith(github.ref, 'refs/tags/')
@@ -669,7 +669,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.23.4
 
       - name: Verify updater artifact signatures
         run: |
