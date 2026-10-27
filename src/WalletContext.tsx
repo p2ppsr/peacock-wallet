@@ -1,3 +1,5 @@
+import { EcpmSession } from './ecpm/ecpmSession'
+import { EcpmPrompt } from './ecpm/EcpmPrompt'
 import { DEVICE_BACKUP_PREFERENCES_KEY, loadDeviceBackupPreferences, saveDeviceBackupPreferences, resolveBackupPreferences, reconcileBackupPreferences, missingPreferredBackups, type DeviceBackupPreferences, type ResolvedBackupPreferences } from './walletStoragePreferences'
 import { invoke } from '@tauri-apps/api/core'
 import { PortabilityError, type ArchiveSource } from './walletPortability'
@@ -397,6 +399,9 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   children,
   onWalletReady
 }) => {
+  const [ecpmSession] = useState(() => new EcpmSession())
+  useEffect(() => () => { ecpmSession.dispose() }, [ecpmSession])
+
   const [managers, setManagers] = useState<ManagerState>({});
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false)
@@ -1368,6 +1373,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
     privilegedKeyManager: PrivilegedKeyManager
   ): Promise<any> => {
     if (storageProfileChangingRef.current) throw new Error('A wallet profile switch is already in progress')
+    const ecpmGeneration = ecpmSession.dispose()
     storageProfileChangingRef.current = true
     if (storageOperationRef.current) {
       storageOperationCancelRequestedRef.current = true
@@ -1532,7 +1538,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       }
 
       // Setup permissions with advanced configuration
-      const permissionConfig = getPermissionConfigForMode();
+      const permissionConfig = { ...getPermissionConfigForMode(), permissionModules: { ecpm: ecpmSession.replace(wallet, ecpmGeneration) } };
       const permissionsManager = new WalletPermissionsManager(wallet, adminOriginator, permissionConfig);
 
       if (protocolPermissionCallback) {
@@ -2441,6 +2447,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   }, [markRegionCurrencyPrompted, regionCurrencyPromptSuggested, settings, updateSettings])
 
   const logout = useCallback(async () => {
+    ecpmSession.dispose()
     storageProfileChangingRef.current = true
     if (storageOperationRef.current) {
       storageOperationCancelRequestedRef.current = true
@@ -3132,6 +3139,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
   return (
     <WalletContext.Provider value={contextValue}>
+      <EcpmPrompt session={ecpmSession} onFocusRequested={onFocusRequested} />
       {children}
       <Dialog
         open={regionCurrencyPromptOpen}
