@@ -1,3 +1,4 @@
+import { parseActionLabelPermission } from '../../utils/actionLabelPermission';
 import { useState, useEffect, useContext, useMemo, type MouseEvent } from 'react'
 import { Chip, Avatar, Stack, Typography, Box } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
@@ -73,6 +74,7 @@ const ProtoChip = ({
     // Don't return null here to avoid conditional hook calls
   }
 
+  const labelAccess = parseActionLabelPermission(securityLevel, protocolID);
   const [protocolName, setProtocolName] = useState(protocolID)
   const [iconURL, setIconURL] = useState(deterministicImage(protocolID))
   const [description, setDescription] = useState('Protocol description not found.')
@@ -90,7 +92,7 @@ const ProtoChip = ({
     }
 
     let cancelled = false
-    const cacheKey = `protocolInfo_${protocolID}_${securityLevel}`
+    const cacheKey = `protocolInfo_${labelAccess ? `${labelAccess.title}: ${labelAccess.label}` : protocolID}_${securityLevel}`
 
     const fetchAndCacheData = async () => {
       // Try to load data from cache
@@ -112,7 +114,7 @@ const ProtoChip = ({
         // Resolve a Protocol info from id and security level
         const certifiers = settings.trustSettings.trustedCertifiers.map(x => x.identityKey)
         const results = await registrant.resolve('protocol', {
-          protocolID: [securityLevel as SecurityLevel, protocolID],
+          protocolID: [securityLevel as SecurityLevel, labelAccess?.metadataProtocol ?? protocolID],
           registryOperators: certifiers
         })
 
@@ -234,7 +236,7 @@ const ProtoChip = ({
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap'
           }}>
-            {protocolName || protocolID}
+            {labelAccess ? `${labelAccess.title}: ${labelAccess.label}` : protocolName || protocolID}
           </span>
           <span style={{
             ...theme.templates?.chipLabelSubtitle,
@@ -244,7 +246,7 @@ const ProtoChip = ({
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap'
           }}>
-            {protocolID}
+            {labelAccess ? `${labelAccess.title}: ${labelAccess.label}` : protocolID}
           </span>
         </div>
       }

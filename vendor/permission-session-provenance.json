@@ -1,0 +1,19 @@
+{
+  "sourceCommit": "240b9c3a4c07266fae97e986dd62858cec62aa68",
+  "sourcePR": "https://github.com/bsv-blockchain/ts-stack/pull/1431",
+  "sourceStatus": "DRAFT; further TS Stack work held by operator",
+  "generator": "scripts/backport-permission-sessions.mjs at sourceCommit",
+  "walletOnlyArtifactVerification": true,
+  "results": [
+    {
+      "package": "@bsv/wallet-toolbox-client",
+      "originalVersion": "2.14.6",
+      "originalTarballSha256": "c5b15586197449a63fe3841ddcc80d7e330bb9e18be8dd0252535c8e737cf44e",
+      "artifactSha256": "72ff305ed716428244251e6d6ce0617e3d8097efd82f0686f3bab05a6c3a1339",
+      "runtimeBundles": 2,
+      "unchangedOtherMethods": 392,
+      "unchangedOtherFiles": 7,
+      "frozenOwningMethodsMatch": true
+    }
+  ]
+}

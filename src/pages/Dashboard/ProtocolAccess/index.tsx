@@ -1,3 +1,4 @@
+import { parseActionLabelPermission } from '../../../utils/actionLabelPermission';
 import { useContext, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -37,6 +38,7 @@ const ProtocolAccess = () => {
   }>();
   const protocolId = decodeURIComponent(encodedProtocolId);
   const securityLevel = Number(decodeURIComponent(encodedSecurityLevel));
+  const labelAccess = parseActionLabelPermission(securityLevel, protocolId);
   const location = useLocation();
   const { managers, settings, network } = useContext(WalletContext);
 
@@ -65,6 +67,7 @@ const ProtocolAccess = () => {
     let cancelled = false;
 
     const hydrate = async () => {
+      if (labelAccess) { setDetails({ name: `${labelAccess.title}: ${labelAccess.label}`, description: labelAccess.description }); setLoading(false); return; }
       if (!registry) return;
 
       setLoading(true);

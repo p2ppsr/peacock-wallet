@@ -1,3 +1,4 @@
+import SessionAccessList from '../../../components/SessionAccessList'
 import { Link } from 'react-router-dom'
 import { useState, useContext, useEffect, useMemo, useCallback } from 'react'
 import {
@@ -60,7 +61,8 @@ const Settings: React.FC = () => {
   useEffect(() => {
     const syncPreference = () => setDiagnosticsPreference(getDiagnosticsEnabled())
     window.addEventListener(DIAGNOSTICS_PREFERENCE_EVENT, syncPreference)
-    return () => window.removeEventListener(DIAGNOSTICS_PREFERENCE_EVENT, syncPreference)
+    return () =>
+ window.removeEventListener(DIAGNOSTICS_PREFERENCE_EVENT, syncPreference)
   }, [])
 
   const loadStoredKeys = useCallback(() => {
@@ -194,6 +196,7 @@ const Settings: React.FC = () => {
       <Typography variant="body1" color="textSecondary" sx={{ mb: 2 }}>
         Control Peacock's appearance, privacy, currency, network, recovery material, and session.
       </Typography>
+      <SessionAccessList />
 
       <Button component={Link} to="/dashboard/settings/backups" variant="outlined" sx={{ mb: 3 }}>
         Backups and portable wallet data
