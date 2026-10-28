@@ -1,5 +1,6 @@
 import { EcpmSession } from './ecpm/ecpmSession'
 import { EcpmPrompt } from './ecpm/EcpmPrompt'
+import { AppThemeProvider } from './components/Theme'
 import { DEVICE_BACKUP_PREFERENCES_KEY, loadDeviceBackupPreferences, saveDeviceBackupPreferences, resolveBackupPreferences, reconcileBackupPreferences, missingPreferredBackups, type DeviceBackupPreferences, type ResolvedBackupPreferences } from './walletStoragePreferences'
 import { invoke } from '@tauri-apps/api/core'
 import { PortabilityError, type ArchiveSource } from './walletPortability'
@@ -140,7 +141,9 @@ function getPermissionConfigForMode(): Partial<PermissionsManagerConfig> {
     seekPermissionsForIdentityResolution: true,
     seekPermissionsForKeyLinkageRevelation: true,
     seekPermissionsForPublicKeyRevelation: true,
-    seekPermissionWhenApplyingActionLabels: true,
+    differentiateActionLabelOperations: true,
+  preferAppPermissionGroups: true,
+  seekPermissionWhenApplyingActionLabels: true,
     seekPermissionWhenListingActionsByLabel: true,
     seekProtocolPermissionsForEncrypting: true,
     seekProtocolPermissionsForHMAC: false, // HMACs are generally less "unsafe" to compute
@@ -361,6 +364,10 @@ type CertificateAccessRequest = {
 }
 
 type ProtocolAccessRequest = {
+  usageType?: string
+  privileged?: boolean
+  moduleDetails?: { scheme: string; operation: string; point: string; keyID: string }
+  actionLabel?: { label: string; operation: 'apply' | 'list' }
   requestID: string
   protocolSecurityLevel: number
   protocolID: string
@@ -399,7 +406,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
   children,
   onWalletReady
 }) => {
-  const [ecpmSession] = useState(() => new EcpmSession())
+  const [ecpmSession] = useState(() => new EcpmSession(() => permissionsManagerRef.current))
   useEffect(() => () => { ecpmSession.dispose() }, [ecpmSession])
 
   const [managers, setManagers] = useState<ManagerState>({});
@@ -906,6 +913,10 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
       protocolID: protocolNameString,
       counterparty,
       originator,
+      usageType: args.usageType,
+      privileged: args.privileged,
+      actionLabel: args.actionLabel,
+      moduleDetails: args.moduleDetails,
       description: reason,
       renewal,
       type: permissionType
@@ -3139,7 +3150,7 @@ export const WalletContextProvider: React.FC<WalletContextProps> = ({
 
   return (
     <WalletContext.Provider value={contextValue}>
-      <EcpmPrompt session={ecpmSession} onFocusRequested={onFocusRequested} />
+      <AppThemeProvider><EcpmPrompt session={ecpmSession} onFocusRequested={onFocusRequested} /></AppThemeProvider>
       {children}
       <Dialog
         open={regionCurrencyPromptOpen}

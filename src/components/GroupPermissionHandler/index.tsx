@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useMemo, useCallback, type ReactNode } from 'react'
+import { useState, useEffect, useContext, useMemo, useCallback, useRef, type ReactNode } from 'react'
 import {
   DialogContent,
   DialogActions,
@@ -6,29 +6,33 @@ import {
   Typography,
   CircularProgress,
   Box,
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
+  Stack,
   Divider,
   Checkbox,
   TextField,
   FormControlLabel,
-  InputAdornment
+  InputAdornment,
+  Collapse,
+  Switch
 } from '@mui/material'
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
+import GppGoodOutlinedIcon from '@mui/icons-material/GppGoodOutlined'
+import LockOutlinedIcon from '@mui/icons-material/LockOutlined'
+import PaymentsOutlinedIcon from '@mui/icons-material/PaymentsOutlined'
+import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
+import BadgeOutlinedIcon from '@mui/icons-material/BadgeOutlined'
+import HandshakeOutlinedIcon from '@mui/icons-material/HandshakeOutlined'
 import CustomDialog from '../CustomDialog'
 import { WalletContext, WalletContextValue } from '../../WalletContext'
 import { UserContext, UserContextValue } from '../../UserContext'
 import AppChip from '../AppChip'
-import ProtoChip from '../ProtoChip'
-import CertificateChip from '../CertificateChip'
-import BasketChip from '../BasketChip'
 import CounterpartyChip from '../CounterpartyChip'
 import AmountDisplay from '../AmountDisplay'
 import { ExchangeRateContext } from '../AmountDisplay/ExchangeRateContextProvider'
 import type { GroupedPermissions } from '@bsv/wallet-toolbox-client'
 import { isSupportedFiatCurrency } from '../../utils/currency'
+import useAppDisplayName from '../../hooks/useAppDisplayName'
+import useRegistryProtocolDescription from '../../hooks/useRegistryProtocolDescription'
 
 // Local type definitions for group permissions
 type ProtocolPermission = {
@@ -56,6 +60,11 @@ type SpendingAuthorization = {
 
 // We use the structure of requests from the wallet context
 // Each request contains requestID, originator and groupPermissions
+
+const FeatureRegistryDescription = ({ protocolID }: { protocolID: [number, string] }) => {
+  const record = useRegistryProtocolDescription(protocolID[1], protocolID[0])
+  return record ? <Box sx={{ mt: 0.5 }}><Typography variant="caption">Registry description</Typography><Typography variant="body2">{record.description}</Typography><Box component="details"><summary>Registry publisher</summary><Typography variant="caption" sx={{ overflowWrap: 'anywhere' }}>{record.publisher}</Typography></Box></Box> : null
+}
 
 const GroupPermissionHandler = () => {
   const {
@@ -110,25 +119,37 @@ const GroupPermissionHandler = () => {
   const [spendingAmountSats, setSpendingAmountSats] = useState<number | null>(null)
   const [spendingAmountDirty, setSpendingAmountDirty] = useState<boolean>(false)
   const [isGranting, setIsGranting] = useState(false)
-  const [showDetails, setShowDetails] = useState(false)
+  const [expandAll, setExpandAll] = useState(false)
+  const [requestGrouping, setRequestGrouping] = useState<'app' | 'peer' | null>(null)
+  const [requestPeerCounterparty, setRequestPeerCounterparty] = useState<string | null>(null)
+
+  const permissionsManagerForRequestRef = useRef<any>(null)
+
+  const appName = useAppDisplayName(originator)
+  const [remember, setRemember] = useState(false)
 
   const isPeerGroupedRequest = useMemo(() => {
+    if (protocolPermissions.some(p => ['self', 'anyone'].includes(p.counterparty ?? 'self'))) return false
+    if (requestGrouping === 'peer') return true
+    if (requestGrouping === 'app') return false
     if (!protocolPermissions.length) return false
     if (basketAccess.length || certificateAccess.length || spendingAuthorization) return false
     const allLevel2 = protocolPermissions.every(p => (p.protocolID?.[0] ?? 0) === 2)
     if (!allLevel2) return false
     const cps = new Set(protocolPermissions.map(p => p.counterparty ?? 'self'))
     return cps.size === 1
-  }, [protocolPermissions, basketAccess, certificateAccess, spendingAuthorization])
+  }, [requestGrouping, protocolPermissions, basketAccess, certificateAccess, spendingAuthorization])
 
   const peerCounterparty = useMemo(() => {
     if (!isPeerGroupedRequest) return null
-    return protocolPermissions[0]?.counterparty ?? 'self'
-  }, [isPeerGroupedRequest, protocolPermissions])
+    if (requestGrouping === 'peer' && requestPeerCounterparty) return requestPeerCounterparty
+    return protocolPermissions[0]?.counterparty ?? requestPeerCounterparty ?? 'self'
+  }, [isPeerGroupedRequest, protocolPermissions, requestGrouping, requestPeerCounterparty])
 
   const protocolKey = (p: ProtocolPermission) => {
-    const sec = p.protocolID?.[0] ?? 0
-    const name = p.protocolID?.[1] ?? ''
+    const id = p.protocolID
+    const sec = Array.isArray(id) ? id[0] : ''
+    const name = Array.isArray(id) ? id[1] : ''
     const cp = p.counterparty ?? 'self'
     return sec === 2 ? `${name}|${cp}` : `${name}`
   }
@@ -218,7 +239,8 @@ const GroupPermissionHandler = () => {
     // Dismiss the current group permission request so we fall back to individual prompts
     if (requestID) {
       try {
-        await (managers?.permissionsManager as any)?.dismissGroupedPermission?.(requestID)
+        const pm = permissionsManagerForRequestRef.current ?? managers?.permissionsManager
+        await (pm as any)?.denyGroupedPermission?.(requestID)
       } catch (error) {
         console.error('Error dismissing group permission:', error)
       }
@@ -251,10 +273,11 @@ const GroupPermissionHandler = () => {
       let grantedSuccessfully = false
       if (requestID) {
         try {
-          await managers?.permissionsManager.grantGroupedPermission({
+          const pm = permissionsManagerForRequestRef.current ?? managers?.permissionsManager
+          await (pm as any)?.grantGroupedPermission?.({
             requestID,
             granted: granted as GroupedPermissions,
-            expiry: 0 // Never expires
+            ...(remember || (spendingAuthorization && spendingEnabled) ? { expiry: 0 } : { sessionDurationMs: 1_800_000 })
           })
           grantedSuccessfully = true
         } catch (error) {
@@ -291,7 +314,7 @@ const GroupPermissionHandler = () => {
     // Monitor the group permission requests from the wallet context
     if (groupPermissionRequests && groupPermissionRequests.length > 0) {
       // Get the first group permission request
-      const currentRequest = groupPermissionRequests[0] as any
+      const currentRequest = groupPermissionRequests[0]
 
       if ((currentRequest as any)?.requestID && (currentRequest as any).requestID === requestID) {
         return
@@ -300,25 +323,40 @@ const GroupPermissionHandler = () => {
       // Process the current request
       const processRequest = async () => {
         try {
-          const { requestID, originator, permissions } = currentRequest
+          // Ensure we have proper typing for the current request
+          const { requestID, originator, permissions, grouping, peerCounterparty } = currentRequest as any
+          // Use the permissions property from the request as our groupPermissions
           const groupPermissions = permissions || {
             protocolPermissions: [],
             basketAccess: [],
             certificateAccess: []
           }
 
-          setRequestID(requestID)
-          setOriginator(originator || '')
-          setShowDetails(false)
+          permissionsManagerForRequestRef.current = (currentRequest as any)?.permissionsManager ?? null
 
+          // Set the request ID
+          setRequestID(requestID)
+
+          setRequestGrouping(grouping ?? null)
+          setRequestPeerCounterparty(peerCounterparty ?? null)
+
+          // Set the originator
+          setOriginator(originator || '')
+
+          // Reset details visibility for new request
+          setExpandAll(false)
+
+          // Set protocol permissions
           const newProtocolPermissions = (groupPermissions?.protocolPermissions) || []
           setProtocolPermissions(newProtocolPermissions)
           setCheckedProtocolKeys(new Set(newProtocolPermissions.map(protocolKey)))
 
+          // Set basket access permissions
           const newBasketAccess = (groupPermissions?.basketAccess) || []
           setBasketAccess(newBasketAccess)
           setCheckedBasketKeys(new Set(newBasketAccess.map(basketKey)))
 
+          // Set certificate access permissions
           const newCertificateAccess = (groupPermissions?.certificateAccess)
             ? groupPermissions.certificateAccess.map((x: CertificateAccess) => ({
               ...x,
@@ -332,6 +370,7 @@ const GroupPermissionHandler = () => {
           setCertificateAccess(newCertificateAccess)
           setCheckedCertificateKeys(new Set(newCertificateAccess.map(certificateKey)))
 
+          // Set spending authorization
           setSpendingAuthorization(groupPermissions?.spendingAuthorization)
           setSpendingEnabled(!!groupPermissions?.spendingAuthorization)
           setSpendingAmountDirty(false)
@@ -352,7 +391,11 @@ const GroupPermissionHandler = () => {
     } else {
       // Reset the dialog when there are no requests
       setOriginator('')
+      setRemember(false)
       setRequestID(null)
+      setRequestGrouping(null)
+      setRequestPeerCounterparty(null)
+      permissionsManagerForRequestRef.current = null
       setSpendingAuthorization(undefined)
       setProtocolPermissions([])
       setBasketAccess([])
@@ -364,7 +407,7 @@ const GroupPermissionHandler = () => {
       setSpendingAmount('')
       setSpendingAmountSats(null)
       setSpendingAmountDirty(false)
-      setShowDetails(false)
+      setExpandAll(false)
     }
   }, [groupPermissionRequests, advanceGroupQueue, requestID, formatInputFromSats])
 
@@ -373,345 +416,427 @@ const GroupPermissionHandler = () => {
     handleCancel()
   }
 
-  // Helper to generate permission summary text
-  const getPermissionSummary = () => {
-    const items: ReactNode[] = []
-    if (isPeerGroupedRequest && peerCounterparty) items.push('Trust the counterparty shown above')
-    if (protocolPermissions.length > 0) items.push('Use your wallet identity to sign and encrypt data')
-    if (basketAccess.length > 0) items.push('Store and access data in your wallet')
-    if (certificateAccess.length > 0) items.push('View your identity credentials')
-    if (spendingAuthorization) {
-      items.push(
-        <span>
-          Spend up to <AmountDisplay showFiatAsInteger>{spendingAuthorization.amount}</AmountDisplay>
-        </span>
-      )
-    }
-    return items
+  // Connect-style summary rows: tinted icon + plain-language title + one-line
+  // detail. Rows with options expand in place; selective changes are
+  // reflected back into the row copy.
+  type SummaryRow = {
+    key: 'peer' | 'protocol' | 'basket' | 'certificate' | 'spending'
+    icon: ReactNode
+    accent: string
+    title: string
+    detail: ReactNode
+    expandable: boolean
+    warning?: boolean
   }
+  const summaryRows = useMemo((): SummaryRow[] => {
+    const rows: SummaryRow[] = []
 
-  // Generate app-specific context message
-  const getContextMessage = () => {
-    const appName = originator || 'This app'
     if (isPeerGroupedRequest && peerCounterparty) {
-      return `${appName} wants you to trust the counterparty shown above for the permissions below.`
+      rows.push({
+        key: 'peer',
+        icon: <HandshakeOutlinedIcon />,
+        accent: '#7e57c2',
+        title: 'Trust this person or service',
+        detail: 'Interact with the person or service shown above through this app.',
+        expandable: false
+      })
     }
-    return `${appName} wants to use your wallet to manage identity, data, and transactions.`
-  }
+    if (protocolPermissions.length > 0) {
+      const total = protocolPermissions.length
+      const selected = protocolPermissions.filter(p => checkedProtocolKeys.has(protocolKey(p))).length
+      rows.push({
+        key: 'protocol',
+        icon: <LockOutlinedIcon />,
+        accent: '#9575cd',
+        title: 'App features',
+        detail: selected === total
+          ? 'Let this app use your wallet to power its features.'
+          : `Let this app run ${selected} of ${total} requested features.`,
+        expandable: true
+      })
+    }
+    if (basketAccess.length > 0) {
+      const total = basketAccess.length
+      const selected = basketAccess.filter(b => checkedBasketKeys.has(basketKey(b))).length
+      rows.push({
+        key: 'basket',
+        icon: <Inventory2OutlinedIcon />,
+        accent: '#4db6ac',
+        title: 'Saved app data',
+        detail: selected === total
+          ? 'Save and read data in your wallet.'
+          : `Access ${selected} of ${total} requested data stores.`,
+        expandable: true
+      })
+    }
+    if (certificateAccess.length > 0) {
+      const total = certificateAccess.length
+      const selected = certificateAccess.filter(c => checkedCertificateKeys.has(certificateKey(c))).length
+      rows.push({
+        key: 'certificate',
+        icon: <BadgeOutlinedIcon />,
+        accent: '#64b5f6',
+        title: 'Verified details',
+        detail: selected === total
+          ? 'Share specific verified details, like a verified name.'
+          : `Share ${selected} of ${total} requested verified details.`,
+        expandable: true
+      })
+    }
+    if (spendingAuthorization) {
+      rows.push({
+        key: 'spending',
+        icon: <PaymentsOutlinedIcon />,
+        accent: '#d4a94f',
+        title: 'Monthly spending limit',
+        detail: spendingEnabled && typeof spendingAmountSats === 'number' && Number.isFinite(spendingAmountSats)
+          ? (
+            <>
+              Up to <AmountDisplay showFiatAsInteger>{spendingAmountSats}</AmountDisplay> per month without asking for approval.
+            </>
+          )
+          : 'Off — each payment will ask for approval.',
+        expandable: true,
+        warning: true
+      })
+    }
+    return rows
+  }, [
+    isPeerGroupedRequest, peerCounterparty, protocolPermissions, basketAccess,
+    certificateAccess, spendingAuthorization, spendingEnabled, spendingAmountSats,
+    checkedProtocolKeys, checkedBasketKeys, checkedCertificateKeys
+  ])
 
   return (
     <CustomDialog
       open={groupPermissionModalOpen && groupPermissionRequests.length > 0}
       onClose={handleDialogClose}
-      maxWidth='md'
+      maxWidth='sm'
       fullWidth
-      title={isPeerGroupedRequest ? 'Trust This Peer?' : 'App Permissions Request'}
+      title={isPeerGroupedRequest ? 'Trust this person or service?' : `Allow ${appName ?? originator ?? 'this app'} to access your wallet?`}
     >
       <DialogContent>
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
+        <Typography sx={{ mb: 2 }}>{groupPermissionRequests[0]?.permissions?.description || 'Choose the app features you want to allow.'}</Typography>
+        <Typography variant="body2" sx={{ mb: 2 }}>Purposes below are provided by the app. Each approval covers the selected protocol features and their displayed key scopes.</Typography>
+        {!spendingEnabled && <Typography variant="body2" sx={{ mb: 2 }}>No payment permission is requested.</Typography>}
+        <FormControlLabel control={<Checkbox checked={remember} onChange={(_, checked) => setRemember(checked)} />} label="Remember these permissions" />
+        <Typography variant="body2" sx={{ mb: 2 }}>{remember || (spendingAuthorization && spendingEnabled)
+          ? 'Saves on-chain permission tokens until revoked. Transaction and wallet service fees may apply. Spending limits apply separately.'
+          : 'This wallet session, up to 30 minutes. Ends on lock, wallet change or revocation in App access. No permission tokens are created.'}</Typography>
+        <Box sx={{ textAlign: 'center', mb: 2.5 }}>
           {originator && (
-            <AppChip
-              size={2.5}
-              showDomain
-              label={originator}
-              clickable={false}
-            />
+            <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+              <AppChip
+                showDomain
+                label={originator}
+                clickable={false}
+              />
+            </Box>
           )}
           {isPeerGroupedRequest && peerCounterparty && (
             <Box sx={{ mt: 1 }}>
               <Typography variant='caption' color='text.secondary'>
-                Counterparty
+                Person or service
               </Typography>
-              {peerCounterparty && (
-                <Box sx={{ mt: 0.25, display: 'flex', justifyContent: 'center' }}>
-                  <CounterpartyChip
-                    counterparty={peerCounterparty}
-                    clickable={false}
-                    layout="compact"
-                  />
-                </Box>
-              )}
+              <Box sx={{ mt: 0.25, display: 'flex', justifyContent: 'center' }}>
+                <CounterpartyChip
+                  counterparty={peerCounterparty}
+                  clickable={false}
+                  layout="compact"
+                />
+              </Box>
             </Box>
           )}
         </Box>
 
-        <Typography variant='body1' sx={{ mb: 3, color: 'text.primary', lineHeight: 1.6 }}>
-          {getContextMessage()}
-        </Typography>
-
-        <Typography variant='subtitle2' sx={{ mb: 2, fontWeight: 600 }}>
-          This allows it to:
-        </Typography>
-
-        <List sx={{ mb: 2 }}>
-          {getPermissionSummary().map((item, i) => (
-            <ListItem key={i} sx={{ py: 1.5 }}>
-              <ListItemIcon>
-                <CheckCircleOutlineIcon color='primary' />
-              </ListItemIcon>
-              <ListItemText primary={item} primaryTypographyProps={{ variant: 'body1' }} />
-            </ListItem>
+        {protocolPermissions.map(p => <Box key={protocolKey(p)} sx={{ mb: 1.5 }}>
+          <Typography fontWeight={600}>{p.protocolID[1].startsWith('p ecpm ') ? 'Protect card and app data' : p.protocolID[1] === 'poker demo transcript' ? 'Sign game messages' : 'Use an app feature'}</Typography>
+          <Typography variant="body2">{p.description || p.protocolID[1]}</Typography>
+          <FeatureRegistryDescription protocolID={p.protocolID} />
+          <Typography variant="caption" color="text.secondary">{p.counterparty === 'self' ? 'Your wallet’s own key scope' : p.counterparty === 'anyone' ? 'Public key scope; no specific opponent is trusted' : p.protocolID[0] === 1 ? 'All counterparties for this feature' : 'Specific counterparty: ' + p.counterparty}</Typography>
+        </Box>)}
+        <Box sx={{ bgcolor: 'action.hover', borderRadius: 3, px: 1, py: 0.5, mb: 2 }}>
+          {summaryRows.map((row, i) => (
+            <Box
+              key={row.key}
+              sx={row.warning ? {
+                my: 0.75,
+                borderRadius: 2,
+                bgcolor: 'rgba(212, 169, 79, 0.08)',
+                border: '1px solid rgba(212, 169, 79, 0.35)'
+              } : {}}
+            >
+              {i > 0 && !row.warning && <Divider sx={{ mx: 1.5, opacity: 0.5 }} />}
+              <Stack
+                direction='row'
+                spacing={2}
+                alignItems='center'
+                data-testid={`group-permission-row-${row.key}`}
+                data-proofrun={`group-permission-row-${row.key}`}
+                sx={{ px: 1.5, py: 1.75 }}
+              >
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    bgcolor: `${row.accent}26`,
+                    color: row.accent
+                  }}
+                >
+                  {row.icon}
+                </Box>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  <Typography variant='body1' sx={{ fontWeight: 600, lineHeight: 1.3 }}>
+                    {row.title}
+                  </Typography>
+                  <Typography variant='body2' color='text.secondary'>
+                    {row.detail}
+                  </Typography>
+                </Box>
+                {row.key === 'spending' && (
+                  <Switch
+                    checked={spendingEnabled}
+                    onClick={(e) => e.stopPropagation()}
+                    onChange={(e) => setSpendingEnabled(e.target.checked)}
+                    inputProps={{
+                      'aria-label': 'Enable automatic payments'
+                    }}
+                    data-testid="group-permission-spending-enabled"
+                    data-proofrun="group-permission-spending-enabled"
+                  />
+                )}
+              </Stack>
+              {row.expandable && (
+                <Collapse in={expandAll} unmountOnExit>
+                  {/* Left padding aligns options with the row text column. */}
+                  <Box sx={{ pl: 9, pr: 2, pb: 1.5 }}>
+                    {row.key === 'spending' && spendingAuthorization && spendingEnabled && (
+                      <TextField
+                        label={!fiatRatesReady && unit.kind === 'fiat' ? 'Monthly spending limit (satoshis)' : unit.kind === 'fiat' ? `Monthly spending limit (${unit.code})` : unit.kind === 'bsv' ? 'Monthly spending limit (BSV)' : 'Monthly spending limit (satoshis)'}
+                        type='number'
+                        size='small'
+                        value={spendingAmount}
+                        onChange={(e) => {
+                          const next = e.target.value
+                          setSpendingAmount(next)
+                          setSpendingAmountDirty(true)
+                          const n = Number(next)
+                          if (!Number.isFinite(n)) {
+                            setSpendingAmountSats(null)
+                            return
+                          }
+                          const sats = inputToSats(n)
+                          setSpendingAmountSats(Number.isFinite(sats) ? sats : null)
+                        }}
+                        fullWidth
+                        inputProps={{
+                          min: 0,
+                          step: inputStep,
+                          'aria-label': 'Grouped spending maximum'
+                        }}
+                        data-testid="group-permission-spending-amount"
+                        data-proofrun="group-permission-spending-amount"
+                        InputProps={{
+                          startAdornment: <InputAdornment position="start">{adornmentLabel}</InputAdornment>
+                        }}
+                        helperText={
+                          Number.isFinite(spendingAmountNumber) && typeof spendingAmountSats === 'number' && Number.isFinite(spendingAmountSats)
+                            ? undefined
+                            : 'Enter a valid number'
+                        }
+                        error={spendingEnabled && (!Number.isFinite(spendingAmountNumber) || spendingAmountNumber < 0 || typeof spendingAmountSats !== 'number' || !Number.isFinite(spendingAmountSats))}
+                      />
+                    )}
+                    {row.key === 'protocol' && protocolPermissions.map((x, j) => (
+                      <FormControlLabel
+                        key={j}
+                        sx={{ display: 'flex', alignItems: 'flex-start', ml: 0, mr: 0, mb: 0.5 }}
+                        control={
+                          <Checkbox
+                            size='small'
+                            sx={{ py: 0.25 }}
+                            checked={checkedProtocolKeys.has(protocolKey(x))}
+                            inputProps={{
+                              'aria-label': `Include app feature ${x.protocolID?.[1] ?? j + 1}`
+                            }}
+                            data-testid={`group-permission-protocol-${j}`}
+                            data-proofrun={`group-permission-protocol-${j}`}
+                            onChange={(e) => {
+                              const key = protocolKey(x)
+                              setCheckedProtocolKeys(prev => {
+                                const next = new Set(prev)
+                                if (e.target.checked) next.add(key)
+                                else next.delete(key)
+                                return next
+                              })
+                            }}
+                          />
+                        }
+                        label={
+                          <Box>
+                            <Typography variant='body2'>
+                              {x.description || x.protocolID?.[1]}
+                            </Typography>
+                            {x.description && (
+                              <Typography variant='caption' color='text.secondary'>
+                                {x.protocolID?.[1]}
+                              </Typography>
+                            )}
+                          </Box>
+                        }
+                      />
+                    ))}
+                    {row.key === 'certificate' && certificateAccess.map((x, j) => (
+                      <FormControlLabel
+                        key={j}
+                        sx={{ display: 'flex', alignItems: 'flex-start', ml: 0, mr: 0, mb: 0.5 }}
+                        control={
+                          <Checkbox
+                            size='small'
+                            sx={{ py: 0.25 }}
+                            checked={checkedCertificateKeys.has(certificateKey(x))}
+                            inputProps={{
+                              'aria-label': `Include verified detail ${x.type ?? j + 1}`
+                            }}
+                            data-testid={`group-permission-certificate-${j}`}
+                            data-proofrun={`group-permission-certificate-${j}`}
+                            onChange={(e) => {
+                              const key = certificateKey(x)
+                              setCheckedCertificateKeys(prev => {
+                                const next = new Set(prev)
+                                if (e.target.checked) next.add(key)
+                                else next.delete(key)
+                                return next
+                              })
+                            }}
+                          />
+                        }
+                        label={
+                          <Box>
+                            <Typography variant='body2'>
+                              {x.description || x.type}
+                            </Typography>
+                            {x.description && (
+                              <Typography variant='caption' color='text.secondary'>
+                                {x.type}
+                              </Typography>
+                            )}
+                          </Box>
+                        }
+                      />
+                    ))}
+                    {row.key === 'basket' && basketAccess.map((x, j) => (
+                      <FormControlLabel
+                        key={j}
+                        sx={{ display: 'flex', alignItems: 'flex-start', ml: 0, mr: 0, mb: 0.5 }}
+                        control={
+                          <Checkbox
+                            size='small'
+                            sx={{ py: 0.25 }}
+                            checked={checkedBasketKeys.has(basketKey(x))}
+                            inputProps={{
+                              'aria-label': `Include saved app data ${x.basket ?? j + 1}`
+                            }}
+                            data-testid={`group-permission-basket-${j}`}
+                            data-proofrun={`group-permission-basket-${j}`}
+                            onChange={(e) => {
+                              const key = basketKey(x)
+                              setCheckedBasketKeys(prev => {
+                                const next = new Set(prev)
+                                if (e.target.checked) next.add(key)
+                                else next.delete(key)
+                                return next
+                              })
+                            }}
+                          />
+                        }
+                        label={
+                          <Box>
+                            <Typography variant='body2'>
+                              {x.description || x.basket}
+                            </Typography>
+                            {x.description && (
+                              <Typography variant='caption' color='text.secondary'>
+                                {x.basket}
+                              </Typography>
+                            )}
+                          </Box>
+                        }
+                      />
+                    ))}
+                  </Box>
+                </Collapse>
+              )}
+            </Box>
           ))}
-        </List>
+        </Box>
 
-        {spendingAuthorization && (
-          <Box sx={{ mt: 3, p: 2, bgcolor: 'action.hover', borderRadius: 1 }}>
-            <Typography variant='subtitle2' sx={{ mb: 0.5 }}>
-              Spending Authorization
-            </Typography>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={spendingEnabled}
-                  onChange={(e) => setSpendingEnabled(e.target.checked)}
-                  inputProps={{
-                    'aria-label': 'Enable grouped spending authorization'
-                  }}
-                  data-testid="group-permission-spending-enabled"
-                  data-proofrun="group-permission-spending-enabled"
-                />
-              }
-              label='Enable automatic spending'
-            />
-            {spendingEnabled && (
-              <Box sx={{ mt: 1 }}>
-                <TextField
-                  label={!fiatRatesReady && unit.kind === 'fiat' ? 'Max satoshis' : unit.kind === 'fiat' ? `Max ${unit.code}` : unit.kind === 'bsv' ? 'Max BSV' : 'Max satoshis'}
-                  type='number'
-                  value={spendingAmount}
-                  onChange={(e) => {
-                    const next = e.target.value
-                    setSpendingAmount(next)
-                    setSpendingAmountDirty(true)
-                    const n = Number(next)
-                    if (!Number.isFinite(n)) {
-                      setSpendingAmountSats(null)
-                      return
-                    }
-                    const sats = inputToSats(n)
-                    setSpendingAmountSats(Number.isFinite(sats) ? sats : null)
-                  }}
-                  fullWidth
-                  inputProps={{
-                    min: 0,
-                    step: inputStep,
-                    'aria-label': 'Grouped spending maximum'
-                  }}
-                  data-testid="group-permission-spending-amount"
-                  data-proofrun="group-permission-spending-amount"
-                  InputProps={{
-                    startAdornment: <InputAdornment position="start">{adornmentLabel}</InputAdornment>
-                  }}
-                  helperText={
-                    Number.isFinite(spendingAmountNumber) && typeof spendingAmountSats === 'number' && Number.isFinite(spendingAmountSats)
-                      ? (
-                        <>
-                          Spend up to <AmountDisplay showFiatAsInteger>{spendingAmountSats}</AmountDisplay> without additional confirmation
-                        </>
-                      )
-                      : 'Enter a valid number'
-                  }
-                  error={spendingEnabled && (!Number.isFinite(spendingAmountNumber) || spendingAmountNumber < 0 || typeof spendingAmountSats !== 'number' || !Number.isFinite(spendingAmountSats))}
-                />
-              </Box>
-            )}
-          </Box>
-        )}
-
-        <Divider sx={{ my: 2 }} />
-
-        <Button
-          onClick={() => setShowDetails(s => !s)}
-          variant='text'
-          size='small'
-          aria-label={showDetails ? 'Hide grouped permission details' : 'Show grouped permission details'}
-          data-testid="group-permission-toggle-details"
-          data-proofrun="group-permission-toggle-details"
+        <Stack
+          direction='row'
+          spacing={1}
+          alignItems='center'
+          justifyContent='center'
+          sx={{ px: 1 }}
         >
-          {showDetails ? 'Hide details' : 'Show details'}
-        </Button>
-
-        {showDetails && (
-          <Box sx={{ mt: 1 }}>
-            {protocolPermissions.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant='subtitle2' gutterBottom>
-                  Protocol Access ({protocolPermissions.length})
-                </Typography>
-                {protocolPermissions.map((x, i) => (
-                  <Box key={i} sx={{ ml: 2, mb: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={checkedProtocolKeys.has(protocolKey(x))}
-                          inputProps={{
-                            'aria-label': `Include protocol permission ${x.protocolID?.[1] ?? i + 1}`
-                          }}
-                          data-testid={`group-permission-protocol-${i}`}
-                          data-proofrun={`group-permission-protocol-${i}`}
-                          onChange={(e) => {
-                            const key = protocolKey(x)
-                            setCheckedProtocolKeys(prev => {
-                              const next = new Set(prev)
-                              if (e.target.checked) next.add(key)
-                              else next.delete(key)
-                              return next
-                            })
-                          }}
-                        />
-                      }
-                      label={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          <ProtoChip
-                            protocolID={x.protocolID[1]}
-                            securityLevel={x.protocolID[0]}
-                            counterparty={x.counterparty}
-                            clickable={false}
-                            canRevoke={false}
-                            layout="compact"
-                          />
-                          {x.protocolID?.[0] === 2 && x.counterparty && (
-                            <CounterpartyChip counterparty={x.counterparty} clickable={false} size={1.0} layout="compact" />
-                          )}
-                          {x.description && (
-                            <Typography variant='caption' color='text.secondary'>
-                              — {x.description}
-                            </Typography>
-                          )}
-                        </Box>
-                      }
-                    />
-                  </Box>
-                ))}
-              </Box>
-            )}
-
-            {certificateAccess.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant='subtitle2' gutterBottom>
-                  Certificate Access ({certificateAccess.length})
-                </Typography>
-                {certificateAccess.map((x, i) => (
-                  <Box key={i} sx={{ ml: 2, mb: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={checkedCertificateKeys.has(certificateKey(x))}
-                          inputProps={{
-                            'aria-label': `Include certificate access ${x.type ?? i + 1}`
-                          }}
-                          data-testid={`group-permission-certificate-${i}`}
-                          data-proofrun={`group-permission-certificate-${i}`}
-                          onChange={(e) => {
-                            const key = certificateKey(x)
-                            setCheckedCertificateKeys(prev => {
-                              const next = new Set(prev)
-                              if (e.target.checked) next.add(key)
-                              else next.delete(key)
-                              return next
-                            })
-                          }}
-                        />
-                      }
-                      label={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          <CertificateChip
-                            certType={x.type}
-                            certVerifier={x.verifierPublicKey}
-                            clickable={false}
-                            canRevoke={false}
-                          />
-                          {x.verifierPublicKey && (
-                            <CounterpartyChip counterparty={x.verifierPublicKey} clickable={false} size={1.0} layout="compact" />
-                          )}
-                          {x.description && (
-                            <Typography variant='caption' color='text.secondary'>
-                              — {x.description}
-                            </Typography>
-                          )}
-                        </Box>
-                      }
-                    />
-                  </Box>
-                ))}
-              </Box>
-            )}
-
-            {basketAccess.length > 0 && (
-              <Box sx={{ mb: 2 }}>
-                <Typography variant='subtitle2' gutterBottom>
-                  Basket Access ({basketAccess.length})
-                </Typography>
-                {basketAccess.map((x, i) => (
-                  <Box key={i} sx={{ ml: 2, mb: 1 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={checkedBasketKeys.has(basketKey(x))}
-                          inputProps={{
-                            'aria-label': `Include basket access ${x.basket ?? i + 1}`
-                          }}
-                          data-testid={`group-permission-basket-${i}`}
-                          data-proofrun={`group-permission-basket-${i}`}
-                          onChange={(e) => {
-                            const key = basketKey(x)
-                            setCheckedBasketKeys(prev => {
-                              const next = new Set(prev)
-                              if (e.target.checked) next.add(key)
-                              else next.delete(key)
-                              return next
-                            })
-                          }}
-                        />
-                      }
-                      label={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                          <BasketChip basketId={x.basket} clickable={false} canRevoke={false} layout="compact" />
-                          {x.description && (
-                            <Typography variant='caption' color='text.secondary'>
-                              — {x.description}
-                            </Typography>
-                          )}
-                        </Box>
-                      }
-                    />
-                  </Box>
-                ))}
-              </Box>
-            )}
-          </Box>
-        )}
+          <GppGoodOutlinedIcon sx={{ color: 'text.secondary', fontSize: 18, flexShrink: 0 }} />
+          <Typography variant='caption' color='text.secondary'>
+            You can turn this off anytime in Settings.
+          </Typography>
+          <Typography variant='caption' color='text.secondary'>·</Typography>
+          <Typography
+            component='button'
+            variant='caption'
+            onClick={() => setExpandAll(v => !v)}
+            aria-label={expandAll ? 'Hide access options' : 'Customize access'}
+            data-testid="group-permission-toggle-details"
+            data-proofrun="group-permission-toggle-details"
+            sx={{
+              background: 'none',
+              border: 'none',
+              p: 0,
+              color: 'primary.main',
+              cursor: 'pointer',
+              fontFamily: 'inherit'
+            }}
+          >
+            {expandAll ? 'Hide options' : 'Customize'}
+          </Typography>
+        </Stack>
       </DialogContent>
-      <DialogActions
-        style={{
-          justifyContent: 'space-around',
-          padding: '1em',
-          flex: 'none'
-        }}
-      >
+
+      <DialogActions sx={{ px: 3, pb: 2.5, pt: 0.5, gap: 1.5, flex: 'none', borderTop: 'none' }}>
         <Button
           onClick={handleCancel}
           variant='outlined'
           disabled={isGranting}
           size='large'
-          aria-label={isPeerGroupedRequest ? 'Deny peer trust request' : 'Deny grouped app permission request'}
+          fullWidth
+          sx={{ borderRadius: 6 }}
+          aria-label={isPeerGroupedRequest ? 'Do not trust this person or service' : 'Do not allow app access'}
           data-testid="group-permission-deny"
           data-proofrun="group-permission-deny"
         >
-          Deny
+          {isPeerGroupedRequest ? 'Don\u2019t trust' : 'Don\u2019t allow'}
         </Button>
         <Button
           variant='contained'
           color='primary'
           onClick={handleGrant}
           disabled={isGranting}
-          startIcon={isGranting ? <CircularProgress size={16} color='inherit' /> : undefined}
+          startIcon={isGranting ? <CircularProgress size={16} color='inherit' /> : <CheckCircleOutlineIcon />}
           size='large'
-          aria-label={isPeerGroupedRequest ? 'Trust peer' : 'Allow grouped app permissions'}
+          fullWidth
+          sx={{ borderRadius: 6 }}
+          aria-label={isPeerGroupedRequest ? 'Trust this person or service' : 'Allow app access'}
           data-testid="group-permission-allow"
           data-proofrun="group-permission-allow"
         >
-          {isGranting ? 'Granting...' : isPeerGroupedRequest ? 'Trust Peer' : 'Allow Access'}
+          {isGranting ? 'Allowing…' : isPeerGroupedRequest ? 'Trust' : remember || (spendingAuthorization && spendingEnabled) ? 'Allow and remember' : 'Allow for this session'}
         </Button>
       </DialogActions>
     </CustomDialog>

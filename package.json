@@ -32,13 +32,13 @@
     "release:minor": "npm run chaintracks:release-gate && npm run chaintracks:checkpoint && npm version minor --no-git-tag-version && node update-version.js $(node -p \"require('./package.json').version\") && git push --follow-tags",
     "release:major": "npm run chaintracks:release-gate && npm run chaintracks:checkpoint && npm version major --no-git-tag-version && node update-version.js $(node -p \"require('./package.json').version\") && git push --follow-tags",
     "clean": "rm -rf node_modules dist src-tauri/target .vite .cache package-lock.json yarn.lock pnpm-lock.yaml && cd src-tauri && cargo clean || true",
-    "test:ecpm": "node scripts/test-ecpm.mjs"
+    "test:ecpm": "node scripts/test-ecpm.mjs && node scripts/test-permission-sessions.mjs"
   },
   "dependencies": {
-    "@bsv/ecpm-permission-module": "0.1.3",
+    "@bsv/ecpm-permission-module": "file:vendor/bsv-ecpm-permission-module-0.1.4-session.tgz",
     "@bsv/message-box-client": "2.6.0",
     "@bsv/sdk": "3.1.0",
-    "@bsv/wallet-toolbox-client": "2.14.6",
+    "@bsv/wallet-toolbox-client": "file:vendor/bsv-wallet-toolbox-client-2.14.6-permission-session.tgz",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^6.5.0",

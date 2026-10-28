@@ -1,3 +1,4 @@
+import SessionAccessList from '../../../components/SessionAccessList';
 import { useCallback, useEffect, useMemo, useState, useContext } from 'react';
 import {
   Box,
@@ -403,6 +404,7 @@ const AppAccess = () => {
         </DialogActions>
       </Dialog>
 
+      <SessionAccessList originator={normalizedDomain} />
       <PageHeader
         title={appName}
         subheading={
